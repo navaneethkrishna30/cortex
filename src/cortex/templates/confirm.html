@@ -1,6 +1,6 @@
-{% extends "base.html" %}{% block content %}
-<h1>Confirm this login</h1><table><tr><th>Client</th><td>{{ request.client_name }}</td></tr><tr><th>Redirect</th><td>{{ request.redirect_uri }}</td></tr>
-<tr><th>From IP</th><td>{{ request.ip }}</td></tr><tr><th>Requested</th><td>{{ request.created|when }}</td></tr></table>
+{% extends "auth_base.html" %}{% block title %}Confirm login{% endblock %}{% block card %}
+<h1>Let {{ request.client_name }} in?</h1><p class="lead">Check this is the login you just started.</p>
+<dl class="facts"><dt>Client</dt><dd>{{ request.client_name }}</dd><dt>Returns to</dt><dd class="mono">{{ request.redirect_uri }}</dd><dt>From IP</dt><dd class="mono">{{ request.ip }}</dd><dt>Requested</dt><dd>{{ request.created|ago }}</dd></dl>
 <form method="post" action="/ui/decide"><input type="hidden" name="ticket" value="{{ ticket }}">
-<label>Scope <select name="scope"><option {% if request.scope == "write" %}selected{% endif %}>write</option><option {% if request.scope == "read" %}selected{% endif %}>read</option></select></label>
-<button name="decision" value="approve">Confirm</button> <button name="decision" value="deny">Deny</button></form>{% endblock %}
+<label class="field"><span class="label">Permission</span><select name="scope"><option value="write" {% if request.scope == "write" %}selected{% endif %}>Read and write</option><option value="read" {% if request.scope == "read" %}selected{% endif %}>Read only</option></select></label>
+<div class="split"><button class="btn" name="decision" value="deny">Deny</button><button class="btn primary" name="decision" value="approve">Approve</button></div></form>{% endblock %}

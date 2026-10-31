@@ -1,0 +1,11 @@
+{% macro mark() %}<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><rect width="20" height="20" rx="4" fill="#e8833a"/><path d="M13.4 7a4.5 4.5 0 1 0 0 6" fill="none" stroke="#161616" stroke-width="2.2" stroke-linecap="square"/></svg>{% endmacro %}
+{% macro password_field(name, label, autocomplete, invalid=False, attrs="", autofocus=False) %}
+<label class="field"><span class="label">{{ label }}</span><span class="reveal"><input type="password" name="{{ name }}" required autocomplete="{{ autocomplete }}" {% if invalid %}aria-invalid="true"{% endif %} {% if autofocus %}autofocus{% endif %} {{ attrs|safe }}></span>{{ caller() if caller else "" }}</label>
+{% endmacro %}
+{% macro otp_field(label="Authenticator code", name="totp", autosubmit=False, autofocus=False) %}
+<label class="field"><span class="label">{{ label }}</span><input class="otp" name="{{ name }}" required inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="000000" autocomplete="one-time-code" {% if autosubmit %}data-autosubmit{% endif %} {% if autofocus %}autofocus{% endif %}></label>
+{% endmacro %}
+{% macro qr_block(qr, secret) %}
+<img class="qr" src="{{ qr }}" alt="QR code for your authenticator app" width="176" height="176">
+<details class="manual"><summary>Enter the key by hand</summary><div class="secret"><code id="totp-secret">{{ secret }}</code><button type="button" class="btn sm" data-copy="totp-secret">Copy</button></div></details>
+{% endmacro %}

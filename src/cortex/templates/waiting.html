@@ -1,0 +1,18 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Approve login · Cortex</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Crect width='20' height='20' rx='4' fill='%23e8833a'/%3E%3Cpath d='M13.4 7a4.5 4.5 0 1 0 0 6' fill='none' stroke='%23161616' stroke-width='2.2'/%3E%3C/svg%3E"><link rel="stylesheet" href="/oauth/static/ui.css"></head>
+<body>{% import "macros.html" as ui %}<main class="auth"><div class="auth-box"><div class="brand">{{ ui.mark() }}Cortex</div><div class="panel"><h1>Approve this login</h1><p class="lead">In the Cortex UI on your tailnet, enter this code with your authenticator.</p>
+<code>{{ code }}</code><button id="c" class="btn sm" type="button">Copy code</button>
+<div id="s" class="status" role="status"><span class="pulse"></span><span id="t">Waiting for approval · <span id="r"></span></span></div></div>
+<p class="below small">If someone sent you to this page, stop. Only approve a login you started yourself.</p></div></main>
+<script>
+const end=Date.now()+{{ seconds }}*1000,t=document.getElementById('t'),s=document.getElementById('s'),c=document.getElementById('c');
+const code=document.querySelector('.panel > code').textContent;
+c.onclick=async()=>{await navigator.clipboard.writeText(code);c.textContent='Copied';setTimeout(()=>c.textContent='Copy code',1500)};
+function stop(m){clearInterval(a);clearInterval(b);s.querySelector('.pulse')?.remove();t.textContent=m;t.className='bad-text'}
+const tick=()=>{const l=Math.max(0,Math.round((end-Date.now())/1000));const r=document.getElementById('r');if(r)r.textContent=Math.floor(l/60)+':'+String(l%60).padStart(2,'0')+' left'};tick();
+const a=setInterval(tick,1000);
+const b=setInterval(async()=>{try{const d=await(await fetch('/oauth/poll')).json();
+if(d.redirect){clearInterval(a);clearInterval(b);t.textContent='Approved. Returning to your client…';location=d.redirect}
+else if(d.status==='denied')stop('This login was denied.');
+else if(d.status!=='pending')stop('This login expired. Start again from your client.')}catch(e){}},2000);
+</script></body></html>

@@ -98,9 +98,12 @@ class AuthStore:
         stored = self._get("setup_token_hash")
         return bool(stored) and secrets.compare_digest(stored, digest(token))
 
-    def finish_setup(self, password: str, totp_secret: str) -> None:
+    def hash_password(self, password: str) -> str:
+        return self.hasher.hash(password)
+
+    def finish_setup(self, password_hash: str, totp_secret: str) -> None:
         with self.lock:
-            self._set("password_hash", self.hasher.hash(password))
+            self._set("password_hash", password_hash)
             self._set("totp_secret", totp_secret)
             self.db.execute("DELETE FROM settings WHERE key='setup_token_hash'")
             self.db.commit()

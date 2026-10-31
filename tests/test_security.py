@@ -30,9 +30,10 @@ def world(store, settings):
 
 def enrol(auth, ui):
     token = auth.new_setup_token()
-    first = ui.post("/ui/setup", data={"setup_token": token, "password": PASSWORD})
-    secret = re.search(r"<code>([A-Z2-7]+)</code>", first.text).group(1)
-    done = ui.post("/ui/setup", data={"setup_token": token, "password": PASSWORD, "totp": pyotp.TOTP(secret).now()})
+    first = ui.post("/ui/setup", data={"setup_token": token, "password": PASSWORD, "confirm": PASSWORD})
+    secret = re.search(r'<code id="totp-secret">([A-Z2-7]+)</code>', first.text).group(1)
+    assert PASSWORD not in first.text
+    done = ui.post("/ui/setup", data={"setup_token": token, "totp": pyotp.TOTP(secret).now()})
     assert done.status_code == 200 and auth.is_set_up
     return secret
 
@@ -247,3 +248,10 @@ def test_ui_cross_origin_post_refused(world):
     auth, _, ui, _ = world
     enrol(auth, ui)
     assert ui.post("/ui/tokens", data={}, headers={"Origin": "https://evil.example"}).status_code == 403
+
+
+def test_setup_refuses_mismatched_passwords(world):
+    auth, _, ui, _ = world
+    token = auth.new_setup_token()
+    page = ui.post("/ui/setup", data={"setup_token": token, "password": PASSWORD, "confirm": PASSWORD + "x"})
+    assert page.status_code == 400 and "match" in page.text and not auth.is_set_up

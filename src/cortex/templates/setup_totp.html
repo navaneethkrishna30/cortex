@@ -1,5 +1,7 @@
-{% extends "base.html" %}{% block nav %}{% endblock %}{% block content %}
-<h1>Enrol TOTP</h1><p>Scan with your authenticator app, then enter a current code. This is shown once.</p>
-<img src="{{ qr }}" alt="TOTP QR code" width="240"><p><code>{{ secret }}</code></p>
-<form method="post"><input type="hidden" name="setup_token" value="{{ setup_token }}"><input type="hidden" name="password" value="{{ password }}">
-<label>Code <input name="totp" required inputmode="numeric" autocomplete="one-time-code" autofocus></label><button>Finish setup</button></form>{% endblock %}
+{% extends "auth_base.html" %}{% block title %}Authenticator{% endblock %}{% block card %}
+<span class="step">Step 2 of 2</span><h1>Add your authenticator</h1><p class="lead">Scan this with your authenticator app, then enter the code it shows.</p>
+{% if error %}<p class="alert bad" role="alert">{{ error }}</p>{% endif %}
+{{ ui.qr_block(qr, secret) }}
+<form method="post"><input type="hidden" name="setup_token" value="{{ setup_token }}">
+{{ ui.otp_field("Code", autosubmit=True, autofocus=True) }}
+<button type="submit" class="btn primary wide">Finish setup</button></form>{% endblock %}

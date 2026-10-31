@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import contextlib
-import html
 import time
 from collections import defaultdict, deque
+from pathlib import Path
 from urllib.parse import urlencode
 
 from mcp.server.transport_security import TransportSecuritySettings
@@ -13,12 +13,16 @@ from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
-from starlette.routing import Route
+from starlette.routing import Mount, Route
+from starlette.staticfiles import StaticFiles
 
 from .auth import REQUEST_TTL, AuthError, AuthStore
 from .config import Settings
 from .mcp_server import Caller, CortexMCP, current_caller
+from .ui_app import templates
 
+# The waiting page shares the UI stylesheet and fonts; nothing here is secret.
+STATIC = Path(__file__).parent / "static"
 RATE_WINDOW = 60
 # The waiting page alone polls 30 times a minute.
 RATE_LIMITS = {"/oauth/": 120, "/mcp": 300}
@@ -84,19 +88,6 @@ class BearerAuth:
             current_caller.reset(reset)
 
 
-WAITING_PAGE = """<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
-<title>Approve Cortex login</title>
-<style>body{{font:16px system-ui;max-width:32rem;margin:15vh auto;padding:0 16px;text-align:center}}
-code{{display:block;font-size:2.5rem;letter-spacing:.1em;margin:1.5rem 0}}</style>
-<h1>Approve this login</h1><p>Enter this code with your TOTP in the Cortex UI on your tailnet:</p>
-<code>{code}</code><p id=s>Waiting for approval. The code expires in {minutes} minutes.</p>
-<script>
-setInterval(async()=>{{const r=await fetch('/oauth/poll');const d=await r.json();
-if(d.redirect)location=d.redirect;
-else if(d.status!=='pending')document.getElementById('s').textContent='This login is '+d.status+'. Start again from your client.';}},2000);
-</script>"""
-
-
 def _error(error: str, description: str = "", status: int = 400) -> JSONResponse:
     return JSONResponse({"error": error, "error_description": description}, status)
 
@@ -157,7 +148,7 @@ def build_public_app(mcp: CortexMCP, auth: AuthStore, settings: Settings) -> Sta
         secret, code = auth.create_login_request(
             client["id"], redirect_uri, query["code_challenge"], scope, query.get("state"), client_ip(request)
         )
-        page = WAITING_PAGE.format(code=html.escape(code), minutes=REQUEST_TTL // 60)
+        page = templates.get_template("waiting.html").render(code=code, seconds=REQUEST_TTL)
         response = HTMLResponse(page, headers={"Cache-Control": "no-store", "X-Frame-Options": "DENY"})
         response.set_cookie("cortex_login", secret, max_age=REQUEST_TTL, httponly=True, secure=secure, samesite="lax", path="/oauth")
         return response
@@ -212,6 +203,7 @@ def build_public_app(mcp: CortexMCP, auth: AuthStore, settings: Settings) -> Sta
         Route("/oauth/authorize", authorize),
         Route("/oauth/poll", poll),
         Route("/oauth/token", token, methods=["POST"]),
+        Mount("/oauth/static", StaticFiles(directory=STATIC)),
         *mcp_app.routes,
     ]
     return Starlette(

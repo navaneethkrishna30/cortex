@@ -1,3 +1,7 @@
-{% extends "base.html" %}{% block content %}<h1>Re-enrol TOTP</h1>
-{% if stage == "verify" %}<form method="post"><label>Password <input type="password" name="password" required></label><label>Current TOTP <input name="totp" required inputmode="numeric"></label><button>Continue</button></form>
-{% else %}<img src="{{ qr }}" alt="TOTP QR code" width="240"><p><code>{{ secret }}</code></p><form method="post"><input type="hidden" name="new_secret" value="{{ secret }}"><label>Code from the new device <input name="new_totp" required inputmode="numeric"></label><button>Save</button></form>{% endif %}{% endblock %}
+{% extends "base.html" %}{% block title %}Security{% endblock %}{% block content %}
+<header class="page-head"><h1>Security</h1></header>
+<section class="section" style="max-width:400px"><div class="section-head"><h2>{% if stage == "verify" %}Move your authenticator to a new device{% else %}Scan with the new device{% endif %}</h2></div>
+{% if error %}<p class="alert bad" role="alert">{{ error }}</p>{% endif %}
+{% if stage == "verify" %}<form method="post">{% call ui.password_field("password", "Password", "current-password") %}{% endcall %}{{ ui.otp_field("Current authenticator code") }}<button type="submit" class="btn primary">Continue</button></form>
+{% else %}{{ ui.qr_block(qr, secret) }}<form method="post"><input type="hidden" name="new_secret" value="{{ secret }}">{{ ui.otp_field("Code from the new device", "new_totp", True, True) }}<button type="submit" class="btn primary">Switch authenticator</button></form>{% endif %}
+<p class="below small">Lost the old device? On the server, run <code>sudo -u cortex cortex auth reset</code></p></section>{% endblock %}
