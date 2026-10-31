@@ -1,7 +1,8 @@
-{% extends "base.html" %}{% block title %}Security{% endblock %}{% block content %}
-<header class="page-head"><h1>Security</h1></header>
-<section class="section" style="max-width:400px"><div class="section-head"><h2>{% if stage == "verify" %}Move your authenticator to a new device{% else %}Scan with the new device{% endif %}</h2></div>
+{% extends "base.html" %}{% block title %}Authenticator{% endblock %}{% block content %}
+<header class="page-head"><h1>Authenticator</h1></header>
+<section class="section form-width"><div class="panel"><h1>{% if stage == "verify" %}Move to a new device{% else %}Scan with the new device{% endif %}</h1>
+<p class="lead">{% if stage == "verify" %}Confirm it's you, then scan a new code with your new device.{% else %}The old device stops working once this code is accepted.{% endif %}</p>
 {% if error %}<p class="alert bad" role="alert">{{ error }}</p>{% endif %}
-{% if stage == "verify" %}<form method="post">{% call ui.password_field("password", "Password", "current-password") %}{% endcall %}{{ ui.otp_field("Current authenticator code") }}<button type="submit" class="btn primary">Continue</button></form>
-{% else %}{{ ui.qr_block(qr, secret) }}<form method="post"><input type="hidden" name="new_secret" value="{{ secret }}">{{ ui.otp_field("Code from the new device", "new_totp", True, True) }}<button type="submit" class="btn primary">Switch authenticator</button></form>{% endif %}
-<p class="below small">Lost the old device? On the server, run <code>sudo -u cortex cortex auth reset</code></p></section>{% endblock %}
+{% if stage == "verify" %}<form method="post">{% call ui.password_field("password", "Password", "current-password") %}{% endcall %}{{ ui.otp_field("Current authenticator code") }}<button type="submit" class="btn primary wide">Continue</button></form>
+{% else %}{{ ui.qr_block(qr, secret) }}<form method="post"><input type="hidden" name="new_secret" value="{{ secret }}">{{ ui.otp_field("Code from the new device", "new_totp", True, True) }}<button type="submit" class="btn primary wide">Switch authenticator</button></form>{% endif %}</div>
+{{ ui.recovery("Lost the old device?") }}</section>{% endblock %}

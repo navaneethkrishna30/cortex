@@ -241,7 +241,7 @@ def test_ui_core_edit_needs_confirmation_and_commits_as_human(world):
     assert ui.post("/ui/files", data={**data, "confirm_core": "yes"}).status_code == 200
     assert store.git.run("log", "-1", "--format=%an").strip() == "human"
     stale = ui.post("/ui/files", data={**data, "confirm_core": "yes"})
-    assert stale.status_code == 409 and "stale" in stale.text
+    assert stale.status_code == 409 and "stale" in stale.text.lower()
 
 
 def test_ui_cross_origin_post_refused(world):

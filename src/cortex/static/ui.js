@@ -31,13 +31,12 @@ if (password) {
     const value = password.value;
     const classes = [/[a-z]/, /[A-Z]/, /\d/, /[^\w]/].filter((re) => re.test(value)).length;
     const score = value.length < 12 ? 0 : value.length >= 20 || (value.length >= 14 && classes >= 3) ? 2 : 1;
-    const [width, color, label] = [
-      [Math.min(value.length * 3, 30), "var(--red)", value ? `${12 - value.length > 0 ? 12 - value.length : 0} more characters needed` : "At least 12 characters. A few random words work well."],
-      [65, "var(--orange)", "Fine. Longer is better: a stolen hash can be attacked offline."],
-      [100, "var(--teal)", "Strong."],
+    const label = [
+      value ? `${12 - value.length > 0 ? 12 - value.length : 0} more characters needed` : "At least 12 characters. A few random words work well.",
+      "Fine. Longer is better: a stolen hash can be attacked offline.",
+      "Strong.",
     ][score];
-    bar.style.width = `${width}%`;
-    bar.style.background = color;
+    bar.dataset.level = value ? score : "empty";
     strengthHint.textContent = label;
     const matches = value && value === confirmation.value;
     matchHint.textContent = !confirmation.value ? "" : matches ? "Passwords match." : "Passwords don't match yet.";
@@ -53,8 +52,12 @@ if (password) {
 $$("[data-copy]").forEach((button) => {
   const label = button.textContent;
   button.addEventListener("click", async () => {
-    await navigator.clipboard.writeText(document.getElementById(button.dataset.copy).textContent.trim());
-    button.textContent = "Copied";
+    try {
+      await navigator.clipboard.writeText(document.getElementById(button.dataset.copy).textContent.trim());
+      button.textContent = "Copied";
+    } catch {
+      button.textContent = "Couldn't copy";
+    }
     setTimeout(() => { button.textContent = label; }, 1500);
   });
 });
@@ -80,12 +83,22 @@ $$("form[data-confirm]").forEach((form) => form.addEventListener("submit", (even
   event.preventDefault();
   dialog.querySelector("h2").textContent = form.dataset.confirm;
   dialog.querySelector("p").textContent = form.dataset.detail || "";
-  dialog.querySelector("[data-yes]").onclick = () => { form.dataset.confirmed = "1"; form.requestSubmit(); };
+  const yes = dialog.querySelector("[data-yes]");
+  yes.textContent = form.dataset.yes || "Confirm";
+  yes.className = `btn ${form.dataset.tone || "danger solid"}`;
+  yes.onclick = () => { form.dataset.confirmed = "1"; form.requestSubmit(); };
   dialog.showModal();
 }));
 
 // Dialogs opened by a button; a form that came back with an error reopens its own
-$$("[data-opens]").forEach((button) => button.addEventListener("click", () => document.getElementById(button.dataset.opens).showModal()));
+$$("[data-opens]").forEach((button) => button.addEventListener("click", () => {
+  button.closest("details.menu")?.removeAttribute("open");
+  document.getElementById(button.dataset.opens).showModal();
+}));
+// A click outside closes the note menu
+document.addEventListener("click", (event) => {
+  $$("details.menu[open]").forEach((menu) => { if (!menu.contains(event.target)) menu.open = false; });
+});
 $$("dialog[data-autoopen]").forEach((open) => open.showModal());
 $$("dialog [data-close]").forEach((button) => button.addEventListener("click", () => button.closest("dialog").close()));
 
@@ -116,15 +129,16 @@ if (filter) {
       if (query) folder.open = matches;
       else if (before) folder.open = before.get(folder);
     });
+    document.getElementById("tree-none").hidden = !query || $$(".tree-file").some((file) => !file.parentElement.hidden);
     if (!query) before = null;
     // Toggle events fire after this handler; only then is saving safe again.
     setTimeout(() => { filtering = false; });
   });
-}
-
-// On a phone the explorer sits above the note, so fold all but the open note's folders.
-if (document.getElementById("editor") && matchMedia("(max-width: 820px)").matches) {
-  folders.forEach((folder) => { folder.open = folder.dataset.keep === "1"; });
+  document.getElementById("filter-clear").addEventListener("click", () => {
+    filter.value = "";
+    filter.dispatchEvent(new Event("input"));
+    filter.focus();
+  });
 }
 
 // Editor
@@ -132,12 +146,15 @@ const textarea = document.getElementById("editor");
 if (textarea && window.EasyMDE) {
   const editor = new EasyMDE({
     element: textarea, autoDownloadFontAwesome: false, toolbar: false, status: false,
-    spellChecker: false, forceSync: true, minHeight: "0",
+    spellChecker: false, forceSync: true, minHeight: "0", lineNumbers: true,
+    placeholder: textarea.placeholder,
     renderingConfig: { sanitizerFunction: (html) => new DOMParser().parseFromString(html, "text/html").body.innerHTML },
   });
   const form = textarea.form;
   const dirty = document.getElementById("dirty");
-  const save = form.querySelector("[type=submit]");
+  const save = document.getElementById("save");
+  // After a save the page is the note itself, so a reload must not land on the old address.
+  if (form.elements.path?.type === "hidden") history.replaceState(null, "", `/ui/files?path=${encodeURIComponent(form.elements.path.value)}`);
   const initial = editor.value();
   let changed = false;
   if (save && form.dataset.new === undefined) save.disabled = true;
@@ -146,14 +163,20 @@ if (textarea && window.EasyMDE) {
     dirty.hidden = !changed;
     if (save && form.dataset.new === undefined) save.disabled = !changed;
   });
-  form.addEventListener("submit", () => { changed = false; });
+  if (form.dataset.readonly !== undefined) editor.codemirror.setOption("readOnly", true);
+  // A submit held back by the confirm dialog hasn't saved anything yet.
+  form.addEventListener("submit", (event) => { if (!event.defaultPrevented) changed = false; });
   window.addEventListener("beforeunload", (event) => { if (changed) event.preventDefault(); });
   document.addEventListener("keydown", (event) => {
     if ((event.ctrlKey || event.metaKey) && event.key === "s") { event.preventDefault(); if (save && !save.disabled) form.requestSubmit(); }
   });
   const preview = document.getElementById("preview");
+  let previewing = false;
   preview.addEventListener("click", () => {
+    // isPreviewActive() lags togglePreview() by a tick, so keep the state here.
+    previewing = !previewing;
     editor.togglePreview();
-    preview.textContent = editor.isPreviewActive() ? "Edit" : "Preview";
+    preview.textContent = previewing ? "Edit" : "Preview";
+    preview.setAttribute("aria-pressed", previewing);
   });
 }

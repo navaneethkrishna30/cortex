@@ -34,6 +34,17 @@ class Git:
         )
         return self.run("rev-parse", "HEAD").strip()
 
+    def history(self, path: str, limit: int = 50) -> list[dict]:
+        """Commits touching `path`, newest first, following renames."""
+        out = self.run("log", "--follow", f"-{limit}", "--format=%H%x1f%ct%x1f%an%x1f%s", "--", path, check=False)
+        rows = (line.split("\x1f") for line in out.splitlines())
+        return [{"sha": sha, "at": float(at), "author": author, "subject": subject} for sha, at, author, subject in rows]
+
+    def show(self, sha: str, path: str) -> str | None:
+        """`path` as it stood at `sha`, or None if it wasn't there under that name."""
+        result = subprocess.run(["git", "show", f"{sha}:{path}"], cwd=self.root, capture_output=True, text=True)
+        return result.stdout if result.returncode == 0 else None
+
     def dirty_paths(self) -> list[str]:
         output = self.run("status", "--porcelain", "-z", "--untracked-files=all")
         entries = output.split("\0")

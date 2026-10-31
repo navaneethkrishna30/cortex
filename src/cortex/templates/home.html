@@ -1,24 +1,25 @@
 {% extends "base.html" %}{% block title %}Access{% endblock %}{% block content %}
-<header class="page-head"><h1>Access</h1><div class="inline-url"><span class="small">MCP address</span><code id="mcp-url">{{ public_url }}/mcp</code><button type="button" class="btn sm" data-copy="mcp-url">Copy</button></div></header>
+<header class="page-head"><h1>Access</h1><button type="button" class="btn primary" data-opens="approve-dialog">Approve a login</button></header>
 {% if welcome %}<p class="alert good" role="status">Setup finished. Create a token, or add the MCP address to a client and approve its code here.</p>{% endif %}
 {% if notice %}<p class="alert good" role="status">{{ notice }}</p>{% endif %}
+<div class="address"><span class="label">MCP address</span>{{ ui.command("mcp-url", public_url ~ "/mcp") }}</div>
 {% if new_token %}<section class="reveal-panel"><h2>Token for {{ new_token_name }}</h2><p>Copy it now. It won't be shown again.</p>
-<div class="secret"><code id="new-token">{{ new_token }}</code><button type="button" class="btn sm" data-copy="new-token">Copy</button></div>
-<span class="label">Add to Claude Code</span><div class="secret"><code id="new-command">claude mcp add --transport http cortex {{ public_url }}/mcp --header "Authorization: Bearer {{ new_token }}"</code><button type="button" class="btn sm" data-copy="new-command">Copy</button></div></section>{% endif %}
-<section class="section"><div class="section-head"><h2>Approve a login</h2><p class="small">Only enter a code showing on your own screen.</p></div>
-<div class="strip">{% if error and error_form == "approve" %}<p class="alert bad" role="alert">{{ error }}</p>{% endif %}
-<form class="strip-form" method="post" action="/ui/approve"><label class="field"><span class="label">Login code</span><input class="code-input" name="code" required placeholder="K7QX-M2PD" maxlength="9" autocomplete="off" spellcheck="false" value="{{ code_value or '' }}"></label>
-{{ ui.otp_field() }}<button type="submit" class="btn primary">Review login</button></form></div></section>
+{{ ui.command("new-token", new_token) }}
+<span class="label">Add to Claude Code</span>{{ ui.command("new-command", 'claude mcp add --transport http cortex ' ~ public_url ~ '/mcp --header "Authorization: Bearer ' ~ new_token ~ '"') }}</section>{% endif %}
 <section class="section"><div class="section-head"><h2>Clients</h2><button type="button" class="btn sm" data-opens="token-dialog">New token</button></div>
-{% if tokens %}<div class="table-wrap"><table><colgroup><col style="width:34%"><col style="width:22%"><col class="hide-sm" style="width:14%"><col class="hide-sm"><col style="width:88px"></colgroup><thead><tr><th>Name</th><th>Permission</th><th class="hide-sm">Type</th><th class="hide-sm">Added</th><th></th></tr></thead><tbody>
-{% for t in tokens %}<tr><td class="primary-cell">{{ t.name }}</td><td>{% if t.scope == "write" %}<span class="ok">Read and write</span>{% else %}Read only{% endif %}</td><td class="dim hide-sm">{{ "OAuth" if t.kind == "refresh" else "Token" }}</td><td class="dim hide-sm" title="{{ t.created|when }}">{{ t.created|ago }}</td>
-<td><form method="post" action="/ui/tokens/revoke" data-confirm="Revoke {{ t.name }}?" data-detail="This client loses access immediately."><input type="hidden" name="id" value="{{ t.id }}"><button class="btn danger sm">Revoke</button></form></td></tr>{% endfor %}
-</tbody></table></div>{% else %}<p class="empty">No clients yet.</p>{% endif %}</section>
-<section class="section"><div class="section-head"><h2>Activity</h2></div>
-{% if audit %}<div class="table-wrap"><table><colgroup><col style="width:34%"><col class="hide-sm" style="width:36%"><col class="hide-sm" style="width:14%"><col></colgroup><thead><tr><th>Event</th><th class="hide-sm">Detail</th><th class="hide-sm">IP</th><th>When</th></tr></thead><tbody>
-{% for a in audit %}<tr><td class="{{ 'bad-text' if a.event|event_bad }}">{{ a.event|event_label }}</td><td class="dim hide-sm">{{ a.detail }}</td><td class="dim mono hide-sm">{{ a.ip }}</td><td class="dim" title="{{ a.at|when }}">{{ a.at|ago }}</td></tr>{% endfor %}
-</tbody></table></div>{% else %}<p class="empty">No activity yet.</p>{% endif %}</section>{% endblock %}
-{% block dialogs %}<dialog id="token-dialog" {% if error and error_form == "token" %}data-autoopen{% endif %}><h2>New token</h2><p>For clients without OAuth, like Claude Code.</p>
+{% if tokens %}<div class="table-wrap"><table><colgroup><col class="col-name"><col class="col-perm"><col class="col-type"><col><col class="col-action"></colgroup><thead><tr><th>Name</th><th>Permission</th><th>Type</th><th>Added</th><th></th></tr></thead><tbody>
+{% for t in tokens %}<tr><td class="primary-cell">{{ t.name }}</td><td data-label="Permission">{% if t.scope == "write" %}<span class="badge good">Read and write</span>{% else %}<span class="badge">Read only</span>{% endif %}</td><td class="dim" data-label="Type">{{ "OAuth" if t.kind == "refresh" else "Token" }}</td><td class="dim" data-label="Added" title="{{ t.created|when }}">{{ t.created|ago }}</td>
+<td><form method="post" action="/ui/tokens/revoke" data-confirm="Revoke {{ t.name }}?" data-detail="This client loses access immediately." data-yes="Revoke {{ t.name }}"><input type="hidden" name="id" value="{{ t.id }}"><button class="btn danger sm">Revoke</button></form></td></tr>{% endfor %}
+</tbody></table></div>{% else %}<p class="empty">No clients yet. Approve a login or create a token to connect one.</p>{% endif %}</section>
+<section class="section" id="activity"><div class="section-head"><h2>Activity</h2><nav aria-label="Filter activity"><a class="tab-link" href="/ui#activity" {% if not failures_only %}aria-current="true"{% endif %}>All</a><a class="tab-link" href="/ui?activity=failures#activity" {% if failures_only %}aria-current="true"{% endif %}>Failures</a></nav></div>
+{% if audit %}<div class="table-wrap"><table><colgroup><col class="col-event"><col class="col-detail"><col class="col-ip"><col></colgroup><thead><tr><th>Event</th><th>Detail</th><th>IP</th><th>When</th></tr></thead><tbody>
+{% for a in audit %}<tr><td class="primary-cell">{% if a.event|event_bad %}<span class="event-fail">{{ a.event|event_label }}<span class="badge bad">Failed</span></span>{% else %}{{ a.event|event_label }}{% endif %}</td><td class="dim" {% if a.detail|event_detail(a.event) %}data-label="Detail"{% endif %}>{{ a.detail|event_detail(a.event) }}</td><td class="mono" {% if a.ip %}data-label="IP"{% endif %}>{{ a.ip }}</td><td class="dim" data-label="When" title="{{ a.at|when }}">{{ a.at|ago }}</td></tr>{% endfor %}
+</tbody></table></div>{% if more_activity %}<p class="table-foot"><a href="/ui?activity={{ 'failures' if failures_only else '' }}&all=1#activity">Show all {{ activity_total }} events</a></p>{% endif %}{% else %}<p class="empty">{{ "No failures." if failures_only else "No activity yet." }}</p>{% endif %}</section>{% endblock %}
+{% block dialogs %}<dialog id="approve-dialog" {% if error and error_form == "approve" %}data-autoopen{% endif %}><h2>Approve a login</h2><p>Only enter a code showing on your own screen.</p>
+{% if error and error_form == "approve" %}<p class="alert bad" role="alert">{{ error }}</p>{% endif %}
+<form method="post" action="/ui/approve"><label class="field"><span class="label">Login code</span><input class="code-input" name="code" required placeholder="K7QX-M2PD" maxlength="9" autocomplete="off" spellcheck="false" value="{{ code_value or '' }}"></label>
+{{ ui.otp_field() }}<div class="actions"><button type="button" class="btn" data-close>Cancel</button><button type="submit" class="btn primary">Review login</button></div></form></dialog>
+<dialog id="token-dialog" {% if error and error_form == "token" %}data-autoopen{% endif %}><h2>New token</h2><p>For clients without OAuth, like Claude Code.</p>
 {% if error and error_form == "token" %}<p class="alert bad" role="alert">{{ error }}</p>{% endif %}
 <form method="post" action="/ui/tokens"><label class="field"><span class="label">Client name</span><input name="name" required placeholder="laptop" autocomplete="off" value="{{ name_value or '' }}"></label>
 <label class="field"><span class="label">Permission</span><select name="scope"><option value="write">Read and write</option><option value="read">Read only</option></select></label>

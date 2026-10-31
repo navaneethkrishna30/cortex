@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import re
 import secrets
 import time
 from pathlib import Path
+from urllib.parse import quote
 
 import pyotp
 import segno
 from jinja2 import Environment, PackageLoader, select_autoescape
 from starlette.applications import Starlette
+from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse, Response
 from starlette.routing import Mount, Route
@@ -18,8 +21,9 @@ from starlette.staticfiles import StaticFiles
 from .auth import AuthError, AuthStore
 from .config import Settings
 from .gitrepo import HUMAN
+from .search import search
 from .store import Store
-from .vault import VaultError
+from .vault import ARCHIVE, VaultError
 
 MIN_PASSWORD = 12
 COOKIE = "cortex_ui"
@@ -52,6 +56,24 @@ FOLDER_HINTS = {
 }
 
 
+NEW_NOTE_FOLDERS = [name for name in FOLDER_HINTS if name != "logs"]
+MOVABLE_FOLDERS = ("memory", "entities", "docs")
+ACTIVITY_ROWS = 10
+DETAILS = {"invalid_grant": "Expired or invalid sign-in", "bad setup token": ""}
+
+
+def _event_detail(detail: str | None, event: str) -> str:
+    """Audit detail in plain words, without repeating the event or the IP column."""
+    text = DETAILS.get(detail or "", detail or "")
+    text = re.sub(r"\s+from\s+\S+$", "", text)
+    return text.replace("(write)", "· read and write").replace("(read)", "· read only")
+
+
+def _sentence(error: Exception) -> str:
+    text = str(error)
+    return text[:1].upper() + text[1:]
+
+
 def _ago(moment: float) -> str:
     seconds = int(time.time() - moment)
     for size, unit in ((86400, "d"), (3600, "h"), (60, "m")):
@@ -63,6 +85,7 @@ def _ago(moment: float) -> str:
 templates.filters["ago"] = _ago
 templates.filters["event_label"] = lambda name: EVENTS.get(name, (name, False))[0]
 templates.filters["event_bad"] = lambda name: EVENTS.get(name, (name, False))[1]
+templates.filters["event_detail"] = _event_detail
 
 
 def _tree(paths: list[str], current: str | None = None) -> dict:
@@ -73,13 +96,11 @@ def _tree(paths: list[str], current: str | None = None) -> dict:
         for folder in parent["folders"]:
             if folder["name"] == name:
                 return folder
-        top = "/" not in path
         folder = {
             "name": name, "path": path, "folders": [], "files": [], "hint": FOLDER_HINTS.get(path),
             "can_add": path.split("/")[0] != "logs",
             "has_current": bool(current and current.startswith(path + "/")),
         }
-        folder["open"] = folder["has_current"] or (top and path != "logs")
         parent["folders"].append(folder)
         return folder
 
@@ -99,7 +120,15 @@ def _tree(paths: list[str], current: str | None = None) -> dict:
             folder["folders"].sort(key=lambda f: f["name"].lower())
             sort(folder)
 
+    def mark_open(node: dict) -> None:
+        """Open what has something to show; an empty folder stays shut."""
+        for folder in node["folders"]:
+            mark_open(folder)
+            has_content = bool(folder["files"] or folder["folders"])
+            folder["open"] = folder["has_current"] or ("/" not in folder["path"] and folder["path"] != "logs" and has_content)
+
     sort(root)
+    mark_open(root)
     return root
 
 
@@ -147,7 +176,7 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
             response.headers["X-Frame-Options"] = "DENY"
             response.headers["Cache-Control"] = "no-store"
             response.headers["Content-Security-Policy"] = (
-                "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self'"
+                "default-src 'self'; style-src 'self'; img-src 'self' data:; script-src 'self'"
             )
             return response
 
@@ -205,16 +234,22 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
         response.delete_cookie(COOKIE, path="/ui")
         return response
 
-    def access_page(status: int = 200, **context) -> HTMLResponse:
+    def access_page(status: int = 200, failures_only: bool = False, show_all: bool = False, **context) -> HTMLResponse:
+        rows = auth.audit(500)
+        if failures_only:
+            rows = [row for row in rows if EVENTS.get(row["event"], ("", False))[1]]
+        activity = {"audit": rows if show_all else rows[:ACTIVITY_ROWS], "failures_only": failures_only,
+                    "more_activity": not show_all and len(rows) > ACTIVITY_ROWS, "activity_total": len(rows)}
         context = {"new_token": None, "new_token_name": None, "error": None, "notice": None, "error_form": None, **context}
-        return page("home.html", status, active="access", tokens=auth.list_tokens(), audit=auth.audit(50),
-                    public_url=settings.public_url, **context)
+        return page("home.html", status, active="access", tokens=auth.list_tokens(), public_url=settings.public_url, **activity, **context)
 
     async def home(request: Request) -> Response:
         notices = {"approved": "Client approved. It will connect within a few seconds.", "denied": "Login denied.",
                    "revoked": "Access revoked.", "expired": "That login request expired. Start again from the client."}
         notice = notices.get(request.query_params.get("done", ""))
-        return access_page(notice=notice, welcome="welcome" in request.query_params)
+        return access_page(notice=notice, welcome="welcome" in request.query_params,
+                           failures_only=request.query_params.get("activity") == "failures",
+                           show_all="all" in request.query_params)
 
     async def enter_code(request: Request) -> Response:
         """Invariant 3: a login code is accepted only here, behind a fresh TOTP."""
@@ -279,35 +314,89 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
         uri = pyotp.TOTP(secret).provisioning_uri(name="owner", issuer_name="Cortex")
         return page("reenroll.html", active="security", stage="enrol", secret=secret, qr=_qr_data_uri(uri), error=error)
 
+    def files_page(status: int = 200, **context) -> HTMLResponse:
+        vault = store.vault
+        paths = vault.all_paths()
+        base = {"path": None, "content": "", "hash": "", "error": None, "message": None, "active": "files", "new": False,
+                "q": None, "results": [], "history": None, "version": None, "new_folders": NEW_NOTE_FOLDERS,
+                "new_folder": None, "new_name": ""}
+        context = {**base, **context}
+        path = context["path"]
+        modified = sorted(paths, key=lambda p: (vault.root / p).stat().st_mtime, reverse=True)[:8]
+        return page("files.html", status, tree=_tree(paths, path),
+                    movable=bool(path) and path.split("/")[0] in MOVABLE_FOLDERS,
+                    recent=[{"path": p, "modified": (vault.root / p).stat().st_mtime} for p in modified],
+                    overview=[{"name": name, "hint": hint, "count": sum(p.startswith(name + "/") for p in paths)}
+                              for name, hint in FOLDER_HINTS.items()], **context)
+
     async def files(request: Request) -> Response:
         vault = store.vault
-        path = request.query_params.get("path")
-        folder = request.query_params.get("folder", "").strip("/")
-        context = {"path": None, "content": "", "hash": "", "error": None, "message": None, "active": "files",
-                   "new": "new" in request.query_params, "prefill": f"{folder}/" if folder else ""}
-        status = 200
+        params = request.query_params
         if request.method == "POST":
             form = await request.form()
-            path = str(form.get("path", "")).strip()
+            folder, name = str(form.get("folder", "")), str(form.get("name", "")).strip()
+            path = str(form.get("path", "")).strip() or (f"{folder}/{name}" if name else "")
             content = str(form.get("content", "")).replace("\r\n", "\n")
             expected = str(form.get("hash", "")) or None
             try:
+                if not path:
+                    raise VaultError("Give the note a name.")
                 clean = vault.clean(path)
                 if clean.startswith("core/") and form.get("confirm_core") != "yes":
-                    raise VaultError("core/ loads into every session. Tick the box below to confirm this change.")
+                    raise VaultError("core/ loads into every session. Confirm this change before saving.")
                 result = store.write(clean, content, expected, actor=HUMAN, human=True)
-                context.update(path=clean, content=vault.read_text(clean), hash=result["hash"], message="Saved and committed.", new=False)
+                return files_page(path=clean, content=vault.read_text(clean), hash=result["hash"], message="Saved and committed.")
             except VaultError as error:
-                context.update(path=path, content=content, hash=expected or "", error=str(error), new=not expected)
-                status = 409
-        elif path:
+                is_new = not expected
+                return files_page(409, path=None if is_new else path, content=content, hash=expected or "", error=_sentence(error),
+                                  new=is_new, new_folder=folder or path.split("/")[0], new_name=name or path.split("/", 1)[-1])
+        if "new" in params:
+            return files_page(new=True, new_folder=params.get("folder", "").strip("/").split("/")[0] or None)
+        query = params.get("q", "").strip()
+        if query and not params.get("path"):
+            return files_page(q=query, results=search(store.index, query, scope="all", limit=20)["results"])
+        message = {"archived": "Note archived.", "moved": "Note moved."}.get(params.get("done", ""))
+        path = params.get("path")
+        if path:
             try:
                 clean = vault.clean(path, must_exist=True)
-                context.update(path=clean, content=vault.read_text(clean), hash=vault.hash(clean))
-            except VaultError as error:
-                context.update(error=str(error))
-                status = 404
-        return page("files.html", status, tree=_tree(vault.all_paths(), context["path"]), **context)
+            except VaultError:
+                return files_page(404, error=f"There's no note at {path}. It may have moved or been archived.")
+            return files_page(path=clean, content=vault.read_text(clean), hash=vault.hash(clean), message=message)
+        return files_page(message=message)
+
+    async def note_history(request: Request) -> Response:
+        vault = store.vault
+        path, rev = request.query_params.get("path", ""), request.query_params.get("rev", "")
+        try:
+            clean = vault.clean(path, must_exist=True)
+        except VaultError:
+            return files_page(404, error=f"There's no note at {path}. It may have moved or been archived.")
+        version = store.git.show(rev, clean) if re.fullmatch(r"[0-9a-f]{40}", rev) else None
+        return files_page(path=clean, history=store.git.history(clean), version=version)
+
+    async def move_note(request: Request) -> Response:
+        form = await request.form()
+        path = str(form.get("path", ""))
+        try:
+            result = store.move(path, str(form.get("to", "")).strip(), actor=HUMAN)
+        except VaultError as error:
+            return files_page(409, error=_sentence(error))
+        return RedirectResponse(f"/ui/files?path={quote(result['path'])}&done=moved", 303)
+
+    async def archive_note(request: Request) -> Response:
+        form = await request.form()
+        path = str(form.get("path", ""))
+        try:
+            store.move(path, f"{ARCHIVE}/{path}", actor=HUMAN)
+        except VaultError as error:
+            return files_page(409, error=_sentence(error))
+        return RedirectResponse("/ui/files?done=archived", 303)
+
+    async def not_found(request: Request, exc: HTTPException) -> HTMLResponse:
+        if exc.status_code == 404:
+            return page("error.html", 404, heading="Page not found", detail="This address doesn't lead anywhere in Cortex.")
+        return page("error.html", exc.status_code, heading="Something went wrong", detail=str(exc.detail))
 
     static = Path(__file__).parent / "static"
     return Starlette(routes=[
@@ -322,5 +411,8 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
         Route("/ui/tokens/revoke", guarded(revoke), methods=["POST"]),
         Route("/ui/reenroll", guarded(reenroll), methods=["GET", "POST"]),
         Route("/ui/files", guarded(files), methods=["GET", "POST"]),
+        Route("/ui/files/history", guarded(note_history)),
+        Route("/ui/files/move", guarded(move_note), methods=["POST"]),
+        Route("/ui/files/archive", guarded(archive_note), methods=["POST"]),
         Mount("/ui/static", StaticFiles(directory=static)),
-    ])
+    ], exception_handlers={HTTPException: not_found})
