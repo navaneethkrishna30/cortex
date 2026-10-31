@@ -1,0 +1,20 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cortex</title>
+<style>
+:root{color-scheme:light dark}
+body{font:15px/1.5 system-ui,sans-serif;max-width:60rem;margin:0 auto;padding:16px}
+nav{display:flex;gap:1rem;align-items:center;margin-bottom:1.5rem}
+nav form{margin-left:auto}
+section{margin-bottom:2rem}
+label{display:block;margin:.5rem 0}
+input,select,button{font:inherit;padding:.35rem .5rem}
+table{border-collapse:collapse;width:100%;font-size:14px}
+td,th{text-align:left;padding:.3rem .5rem;border-bottom:1px solid #8884}
+.error{color:#c33}.ok{color:#2a7}
+.scroll{overflow-x:auto}
+code{word-break:break-all}
+</style>{% block head %}{% endblock %}</head><body>
+<nav><strong>Cortex</strong>{% block nav %}<a href="/ui">Access</a><a href="/ui/files">Files</a><a href="/ui/reenroll">Re-enrol TOTP</a>
+<form method="post" action="/ui/logout"><button>Log out</button></form>{% endblock %}</nav>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+{% block content %}{% endblock %}</body></html>

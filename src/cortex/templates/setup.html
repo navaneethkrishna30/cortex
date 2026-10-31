@@ -1,0 +1,5 @@
+{% extends "base.html" %}{% block nav %}{% endblock %}{% block content %}
+<h1>First-run setup</h1><p>The setup token is printed in the server console.</p>
+<form method="post"><label>Setup token <input name="setup_token" required autocomplete="off"></label>
+<label>UI password (long passphrase) <input type="password" name="password" required minlength="12" autocomplete="new-password"></label>
+<button>Continue</button></form>{% endblock %}

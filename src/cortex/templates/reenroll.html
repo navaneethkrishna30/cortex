@@ -1,0 +1,3 @@
+{% extends "base.html" %}{% block content %}<h1>Re-enrol TOTP</h1>
+{% if stage == "verify" %}<form method="post"><label>Password <input type="password" name="password" required></label><label>Current TOTP <input name="totp" required inputmode="numeric"></label><button>Continue</button></form>
+{% else %}<img src="{{ qr }}" alt="TOTP QR code" width="240"><p><code>{{ secret }}</code></p><form method="post"><input type="hidden" name="new_secret" value="{{ secret }}"><label>Code from the new device <input name="new_totp" required inputmode="numeric"></label><button>Save</button></form>{% endif %}{% endblock %}

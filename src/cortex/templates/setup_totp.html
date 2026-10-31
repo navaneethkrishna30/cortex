@@ -1,0 +1,5 @@
+{% extends "base.html" %}{% block nav %}{% endblock %}{% block content %}
+<h1>Enrol TOTP</h1><p>Scan with your authenticator app, then enter a current code. This is shown once.</p>
+<img src="{{ qr }}" alt="TOTP QR code" width="240"><p><code>{{ secret }}</code></p>
+<form method="post"><input type="hidden" name="setup_token" value="{{ setup_token }}"><input type="hidden" name="password" value="{{ password }}">
+<label>Code <input name="totp" required inputmode="numeric" autocomplete="one-time-code" autofocus></label><button>Finish setup</button></form>{% endblock %}

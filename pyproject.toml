@@ -1,0 +1,36 @@
+[project]
+name = "cortex"
+version = "0.1.0"
+description = "Local-first memory layer for AI agents: markdown notes, a SQLite index, one MCP server"
+readme = "README.md"
+authors = [
+    { name = "Navaneeth Krishna" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "argon2-cffi>=25.1.0",
+    "fastembed>=0.9.1",
+    "httpx>=0.28.1",
+    "jinja2>=3.1.6",
+    "mcp>=1.12",
+    "pyotp>=2.10.0",
+    "python-multipart>=0.0.32",
+    "pyyaml>=6.0.3",
+    "segno>=1.6.6",
+    "sqlite-vec>=0.1.9",
+    "starlette>=1.10.0",
+    "uvicorn>=0.54.0",
+    "watchdog>=6.0.0",
+]
+
+[project.scripts]
+cortex = "cortex.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.9.18,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]

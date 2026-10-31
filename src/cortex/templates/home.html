@@ -1,0 +1,15 @@
+{% extends "base.html" %}{% block content %}
+<section><h2>Approve a login</h2><p>Only approve a code showing on your own screen right now.</p>
+<form method="post" action="/ui/approve"><label>Code <input name="code" required placeholder="K7QX-M2PD" autocomplete="off"></label>
+<label>TOTP <input name="totp" required inputmode="numeric" autocomplete="one-time-code"></label><button>Continue</button></form></section>
+<section><h2>Tokens</h2>
+{% if new_token %}<p class="ok">Copy it now; it is not shown again:</p><p><code>{{ new_token }}</code></p>{% endif %}
+<div class="scroll"><table><tr><th>Name</th><th>Scope</th><th>Kind</th><th>Created</th><th></th></tr>
+{% for t in tokens %}<tr><td>{{ t.name }}</td><td>{{ t.scope }}</td><td>{{ "oauth" if t.kind == "refresh" else t.kind }}</td><td>{{ t.created|when }}</td>
+<td><form method="post" action="/ui/tokens/revoke"><input type="hidden" name="id" value="{{ t.id }}"><button>Revoke</button></form></td></tr>{% endfor %}</table></div>
+<h3>New static token</h3><form method="post" action="/ui/tokens"><label>Client name <input name="name" required></label>
+<label>Scope <select name="scope"><option>write</option><option>read</option></select></label>
+<label>TOTP <input name="totp" required inputmode="numeric" autocomplete="one-time-code"></label><button>Create</button></form>
+<p>MCP URL: <code>{{ public_url }}/mcp</code></p></section>
+<section><h2>Audit log</h2><div class="scroll"><table><tr><th>When</th><th>Event</th><th>Detail</th><th>IP</th></tr>
+{% for a in audit %}<tr><td>{{ a.at|when }}</td><td>{{ a.event }}</td><td>{{ a.detail }}</td><td>{{ a.ip }}</td></tr>{% endfor %}</table></div></section>{% endblock %}

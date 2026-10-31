@@ -1,0 +1,22 @@
+[Unit]
+Description=Cortex memory server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=cortex
+Group=cortex
+UMask=0077
+EnvironmentFile=/etc/cortex.env
+WorkingDirectory=/var/lib/cortex
+ExecStart=/opt/cortex/.venv/bin/cortex serve
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/cortex
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

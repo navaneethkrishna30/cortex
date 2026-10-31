@@ -1,0 +1,6 @@
+{% extends "base.html" %}{% block content %}
+<h1>Confirm this login</h1><table><tr><th>Client</th><td>{{ request.client_name }}</td></tr><tr><th>Redirect</th><td>{{ request.redirect_uri }}</td></tr>
+<tr><th>From IP</th><td>{{ request.ip }}</td></tr><tr><th>Requested</th><td>{{ request.created|when }}</td></tr></table>
+<form method="post" action="/ui/decide"><input type="hidden" name="ticket" value="{{ ticket }}">
+<label>Scope <select name="scope"><option {% if request.scope == "write" %}selected{% endif %}>write</option><option {% if request.scope == "read" %}selected{% endif %}>read</option></select></label>
+<button name="decision" value="approve">Confirm</button> <button name="decision" value="deny">Deny</button></form>{% endblock %}
