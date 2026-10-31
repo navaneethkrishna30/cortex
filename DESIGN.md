@@ -21,7 +21,7 @@ The UI is a small tool for one person, and it should be loud and obvious: thick 
 | `--link-mark` (cyan) | A link between notes | Wikilinks, "Not saved" |
 | `--folder` | The folder this belongs to | Tabs, explorer cards, a note's page |
 
-Folders: core pink, memory yellow, entities cyan, docs lime, logs lilac. The page ground is cobalt, and a note's page takes its folder's colour.
+Folders: core orange, memory yellow, entities cyan, docs lime, logs lilac. The page ground is cobalt, and a note's page takes its folder's colour.
 
 Everything sits on a white sheet with black ink. Text on a colour is always black, so contrast never depends on the colour.
 

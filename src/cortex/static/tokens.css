@@ -4,7 +4,7 @@
 
   /* Palette. Components use the role tokens below, not these. */
   --black: #0b0b0f; --white: #ffffff; --gray: #3d3d47; --gray-light: #f0f0f4;
-  --cobalt: #2222e6; --pink: #ff5da2; --yellow: #ffe14d; --cyan: #5ce1e6; --lime: #b9f95d; --lilac: #c4b1ff; --red: #c9240a;
+  --cobalt: #2222e6; --pink: #ff5da2; --yellow: #ffe14d; --cyan: #5ce1e6; --lime: #b9f95d; --lilac: #c4b1ff; --orange: #ff9f45; --red: #c9240a;
 
   /* Page ground; a note's page swaps it for its folder's colour. */
   --ground: var(--cobalt);
@@ -60,7 +60,7 @@
 }
 
 /* One colour per vault folder. */
-.f-core { --folder: var(--pink); }
+.f-core { --folder: var(--orange); }
 .f-memory { --folder: var(--yellow); }
 .f-entities { --folder: var(--cyan); }
 .f-docs { --folder: var(--lime); }
