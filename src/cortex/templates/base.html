@@ -1,11 +1,11 @@
 {% import "macros.html" as ui %}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{% block title %}Cortex{% endblock %} · Cortex</title>
 <link rel="icon" href="/ui/static/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="{% block css %}/ui/static/ui.css{% endblock %}">{% block head %}{% endblock %}</head><body>
-{% block body %}<header class="topbar"><div class="topbar-in"><a class="brand" href="/ui" aria-label="Cortex">{{ ui.mark() }}Cortex</a>
-<nav class="nav-links" aria-label="Main"><a href="/ui" {% if active == "access" %}aria-current="page"{% endif %}>Access</a><a href="/ui/files" {% if active == "files" %}aria-current="page"{% endif %}>Files</a><a href="/ui/reenroll" {% if active == "security" %}aria-current="page"{% endif %}>Authenticator</a></nav>
-<form class="logout" method="post" action="/ui/logout"><button aria-label="Log out"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg><span>Log out</span></button></form></div></header>
-<main>{% block main %}<div class="page">{% block content %}{% endblock %}</div>{% endblock %}</main>
+<link rel="stylesheet" href="/ui/static/ui.css">{% block head %}{% endblock %}</head><body{% block body_attrs %}{% endblock %}>
+{% block body %}<header class="topbar"><div class="topbar-in"><a class="brand" href="/ui" aria-label="Cortex">cortex</a>
+<nav class="nav-links" aria-label="Main"><a href="/ui" {% if active == "access" %}aria-current="page"{% endif %}>Access</a><a href="/ui/files" {% if active == "files" %}aria-current="page"{% endif %}>Files</a></nav>
+<a class="nav-quiet" href="/ui/reenroll" {% if active == "security" %}aria-current="page"{% endif %}>Authenticator</a><form class="logout" method="post" action="/ui/logout"><button>Log out</button></form></div></header>
+<main>{% block main %}<div class="wrap">{% block above %}{% endblock %}<div class="page">{% block content %}{% endblock %}</div></div>{% endblock %}</main>
 <dialog id="confirm"><form method="dialog"><h2></h2><p></p><div class="actions"><button class="btn">Cancel</button><button class="btn danger solid" data-yes>Confirm</button></div></form></dialog>
 {% block dialogs %}{% endblock %}{% endblock %}
 {% block scripts %}{% endblock %}<script src="/ui/static/ui.js"></script></body></html>

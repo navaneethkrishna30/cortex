@@ -143,40 +143,45 @@ if (filter) {
 
 // Editor
 const textarea = document.getElementById("editor");
-if (textarea && window.EasyMDE) {
-  const editor = new EasyMDE({
-    element: textarea, autoDownloadFontAwesome: false, toolbar: false, status: false,
-    spellChecker: false, forceSync: true, minHeight: "0", lineNumbers: true,
-    placeholder: textarea.placeholder,
-    renderingConfig: { sanitizerFunction: (html) => new DOMParser().parseFromString(html, "text/html").body.innerHTML },
-  });
+if (textarea) {
   const form = textarea.form;
   const dirty = document.getElementById("dirty");
   const save = document.getElementById("save");
   // After a save the page is the note itself, so a reload must not land on the old address.
   if (form.elements.path?.type === "hidden") history.replaceState(null, "", `/ui/files?path=${encodeURIComponent(form.elements.path.value)}`);
-  const initial = editor.value();
-  let changed = false;
-  if (save && form.dataset.new === undefined) save.disabled = true;
-  editor.codemirror.on("change", () => {
-    changed = editor.value() !== initial;
+  const initial = textarea.value;
+  // A form that came back with an error holds a draft the saved note doesn't.
+  let changed = form.querySelector(".alert.bad") !== null && form.dataset.new === undefined;
+  const refresh = () => {
     dirty.hidden = !changed;
     if (save && form.dataset.new === undefined) save.disabled = !changed;
+  };
+  refresh();
+  textarea.addEventListener("input", () => {
+    changed = textarea.value !== initial;
+    refresh();
   });
-  if (form.dataset.readonly !== undefined) editor.codemirror.setOption("readOnly", true);
   // A submit held back by the confirm dialog hasn't saved anything yet.
   form.addEventListener("submit", (event) => { if (!event.defaultPrevented) changed = false; });
   window.addEventListener("beforeunload", (event) => { if (changed) event.preventDefault(); });
   document.addEventListener("keydown", (event) => {
     if ((event.ctrlKey || event.metaKey) && event.key === "s") { event.preventDefault(); if (save && !save.disabled) form.requestSubmit(); }
   });
-  const preview = document.getElementById("preview");
-  let previewing = false;
-  preview.addEventListener("click", () => {
-    // isPreviewActive() lags togglePreview() by a tick, so keep the state here.
-    previewing = !previewing;
-    editor.togglePreview();
-    preview.textContent = previewing ? "Edit" : "Preview";
-    preview.setAttribute("aria-pressed", previewing);
-  });
+  // Read shows the last save, rendered by the server; Edit shows the source.
+  const readButton = document.getElementById("view-read");
+  const editButton = document.getElementById("view-edit");
+  if (readButton) {
+    const view = document.getElementById("note-view");
+    const edit = document.getElementById("note-edit");
+    const show = (editing) => {
+      view.hidden = editing;
+      edit.hidden = !editing;
+      readButton.setAttribute("aria-pressed", !editing);
+      editButton.setAttribute("aria-pressed", editing);
+      if (editing) textarea.focus();
+    };
+    readButton.addEventListener("click", () => show(false));
+    editButton.addEventListener("click", () => show(true));
+    if (!edit.hidden) show(true);
+  }
 }

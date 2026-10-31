@@ -156,7 +156,7 @@ def test_full_login_then_tools_then_refresh_rotation(world):
 
 def test_ui_routes_absent_from_public_and_mcp_absent_from_ui(world):
     _, public, ui, _ = world
-    for path in ("/ui", "/ui/login", "/ui/setup", "/ui/files", "/ui/static/easymde.min.js"):
+    for path in ("/ui", "/ui/login", "/ui/setup", "/ui/files", "/ui/static/ui.js"):
         assert public.get(path).status_code in (401, 404), path
     assert ui.post("/mcp", json={}).status_code == 404
     assert ui.get("/oauth/authorize").status_code == 404

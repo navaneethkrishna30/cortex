@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Approve login · Cortex</title>
 <link rel="icon" href="/oauth/static/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/oauth/static/ui.css"></head>
-<body>{% import "macros.html" as ui %}<main class="auth"><div class="auth-box"><div class="brand">{{ ui.mark() }}Cortex</div><div class="panel"><h1>Approve this login</h1><p class="lead">In the Cortex UI on your tailnet, enter this code with your authenticator.</p>
+<body>{% import "macros.html" as ui %}<main class="auth"><div class="auth-box"><div class="brand">cortex</div><div class="panel"><h1>Approve this login</h1><p class="lead">In the Cortex UI on your tailnet, enter this code with your authenticator.</p>
 <code>{{ code }}</code><button id="c" class="btn sm" type="button">Copy code</button>
 <div id="s" class="status" role="status"><span class="pulse"></span><span id="t">Waiting for approval · <span id="r"></span></span></div></div>
 <p class="below small">If someone sent you to this page, stop. Only approve a login you started yourself.</p></div></main>

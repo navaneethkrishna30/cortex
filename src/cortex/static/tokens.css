@@ -1,63 +1,67 @@
 /* Cortex design tokens: the only file allowed to hold raw colours. See DESIGN.md. */
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
   /* Palette. Components use the role tokens below, not these. */
-  --gray-100: #161616; --gray-95: #1e1e1e; --gray-90: #262626; --gray-80: #393939; --gray-70: #525252;
-  --gray-60: #6f6f6f; --gray-50: #8d8d8d; --gray-40: #a8a8a8; --gray-30: #c6c6c6; --gray-10: #f4f4f4;
-  --orange-50: #e8833a; --orange-40: #f09452;
-  --teal-40: #3db8ac;
-  --red-40: #ff8389; --red-60: #da1e28; --red-50: #fa4d56;
-  --yellow-30: #f1c21b;
-  --white: #ffffff;
+  --black: #0b0b0f; --white: #ffffff; --gray: #3d3d47; --gray-light: #f0f0f4;
+  --cobalt: #2222e6; --pink: #ff5da2; --yellow: #ffe14d; --cyan: #5ce1e6; --lime: #b9f95d; --lilac: #c4b1ff; --red: #c9240a;
+
+  /* Page ground; a note's page swaps it for its folder's colour. */
+  --ground: var(--cobalt);
+  --on-ground: var(--white);
 
   /* Surfaces and lines */
-  --bg: var(--gray-100);
-  --panel: var(--gray-95);
-  --hover: var(--gray-90);
-  --selected: var(--gray-80);
-  --line: var(--gray-80);
-  --line-subtle: var(--gray-90);
-  --line-control: var(--gray-60);
-  --line-control-hover: var(--gray-50);
-  --scrim: #000000aa;
-  --qr-bg: var(--white);
+  --sheet: var(--white);
+  --hover: var(--gray-light);
+  --line: var(--black);
+  --scrim: #0b0b0fb3;
 
   /* Text */
-  --ink: var(--gray-10);
-  --ink-2: var(--gray-30);
-  --ink-3: var(--gray-40);
-  --ink-4: var(--gray-50);
-  --ink-placeholder: var(--gray-60);
+  --ink: var(--black);
+  --ink-2: var(--gray);
+  --ink-inverse: var(--white);
 
-  /* Roles: accent acts, good confirms, warn cautions, bad is danger or failure. */
-  --accent: var(--orange-50); --accent-hover: var(--orange-40); --accent-ink: var(--gray-100); --accent-tint: #e8833a1f;
-  --good: var(--teal-40); --good-tint: #3db8ac1f;
-  --warn: var(--yellow-30); --warn-tint: #f1c21b1a;
-  --bad: var(--red-40); --bad-tint: #ff83891f;
-  --danger: var(--red-60); --danger-hover: var(--red-50); --danger-ink: var(--white);
-  --info-tint: var(--gray-90);
+  /* Roles: accent acts, good confirms, warn cautions, bad is failure, danger destroys. */
+  --accent: var(--pink);
+  --good: var(--lime);
+  --warn: var(--yellow);
+  --bad: var(--pink);
+  --danger: var(--red);
+  --link-mark: var(--cyan);
 
   /* Space */
   --s-1: 2px; --s-2: 4px; --s-3: 8px; --s-4: 12px; --s-5: 16px; --s-6: 24px; --s-7: 32px; --s-8: 40px; --s-9: 48px; --s-10: 64px;
 
   /* Type */
-  --sans: "IBM Plex Sans", system-ui, sans-serif;
-  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
-  --text-xs: 12px/16px var(--sans);
-  --text-sm: 13px/20px var(--sans);
-  --text-md: 15px/22px var(--sans);
-  --text-lg: 17px/24px var(--sans);
-  --text-xl: 24px/32px var(--sans);
-  --code: 13px/20px var(--mono);
-  --editor: 14px/24px var(--mono);
+  --sans: "Bricolage Grotesque", system-ui, sans-serif;
+  --mono: "DM Mono", ui-monospace, Menlo, monospace;
+  --text-xs: 13px/18px var(--sans);
+  --text-sm: 14px/20px var(--sans);
+  --text-md: 16px/24px var(--sans);
+  --text-lg: 21px/32px var(--sans);
+  --text-xl: 28px/32px var(--sans);
+  --text-2xl: 36px/40px var(--sans);
+  --text-display: clamp(64px, 9vw, 112px)/.95 var(--sans);
+  --text-note: clamp(56px, 9vw, 128px)/.92 var(--sans);
+  --code: 14px/24px var(--mono);
+  --editor: 15px/26px var(--mono);
   --display-code: 32px/40px var(--mono);
 
   /* Sizes */
-  --radius: 4px;
-  --control: 40px; --control-sm: 32px;
-  --bar: 56px; --pane: 56px; --row: 32px;
-  --content: 1120px; --form: 480px; --auth: 400px; --dialog: 440px; --explorer: 288px; --prose: 760px;
+  --border: 3px solid var(--line);
+  --radius: 14px; --radius-sm: 10px;
+  --shadow: 5px 5px 0 var(--line);
+  --shadow-sm: 3px 3px 0 var(--line);
+  --shadow-lg: 10px 10px 0 var(--line);
+  --control: 44px; --control-sm: 40px;
+  --wrap: 1220px; --form: 480px; --auth: 420px; --dialog: 460px; --explorer: 290px; --prose: 660px;
 
-  --fast: .12s;
+  --fast: .08s;
 }
+
+/* One colour per vault folder. */
+.f-core { --folder: var(--pink); }
+.f-memory { --folder: var(--yellow); }
+.f-entities { --folder: var(--cyan); }
+.f-docs { --folder: var(--lime); }
+.f-logs { --folder: var(--lilac); }

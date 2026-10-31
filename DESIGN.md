@@ -1,6 +1,6 @@
 # Cortex UI design
 
-The UI is a small admin tool for one person. It should feel quiet and be obvious to use.
+The UI is a small tool for one person, and it should be loud and obvious: thick lines, hard shadows, big type, and one colour per vault folder.
 
 ## Where things live
 
@@ -13,28 +13,37 @@ The UI is a small admin tool for one person. It should feel quiet and be obvious
 
 | Role | Means | Use for |
 |---|---|---|
-| `--accent` (orange) | You can act here, or this is selected | Primary button, links, focus ring, current nav item and file |
-| `--good` (teal) | Healthy or done | Success alerts, "Read and write" badge |
-| `--warn` (yellow) | Take care | Warning alerts, "Unsaved" |
-| `--bad` (red) | Failure or danger | Error alerts, "Failed" badge, danger buttons |
-| Grays | Everything else | Text, surfaces, lines, folder icons |
+| `--accent` (pink) | The main thing to do here | Primary button, focus on inputs |
+| `--good` (lime) | Healthy or done | Success alerts, new-token panel |
+| `--warn` (yellow) | Take care | Warning alerts |
+| `--bad` (pink) | Something failed | Error alerts, failed activity |
+| `--danger` (red) | Destroys something | Confirm button in a dialog, Archive |
+| `--link-mark` (cyan) | A link between notes | Wikilinks, "Not saved" |
+| `--folder` | The folder this belongs to | Tabs, explorer cards, a note's page |
 
-Status colour goes on a badge or alert, never on bare text, so it can't be mistaken for a link.
+Folders: core pink, memory yellow, entities cyan, docs lime, logs lilac. The page ground is cobalt, and a note's page takes its folder's colour.
+
+Everything sits on a white sheet with black ink. Text on a colour is always black, so contrast never depends on the colour.
 
 ## Type
 
-`--text-xl` page title, `--text-lg` section and dialog title, `--text-md` body, `--text-sm` labels and secondary text, `--text-xs` badges. Mono is for paths, codes and commands.
+Bricolage Grotesque for everything people read, with weight 800 for headings. DM Mono for paths, codes and the editor. Both are self-hosted, because the CSP blocks font hosts. Sizes are the `--text-*` tokens.
 
 ## Layout
 
-- The top bar is the same on every page, so nothing jumps between tabs.
-- Page content sits in the centred `--content` column. Single forms use `--form`. Files alone runs edge to edge.
-- Group with space first and hairlines second. Gaps between groups are at least twice the gaps inside them.
-- Below 900px, Files shows the list or the note, never both. Below 720px, table rows become labelled cards; columns are never silently dropped.
+- The top bar is the same on every page. Authenticator is a quiet link beside Log out, because it's rare.
+- Page content sits on a sheet in the centred `--wrap` column. Single forms use `--form`.
+- Folder tabs stick out of the top of the Access sheet.
+- Small tilts are for stickers: client cards, failed events, the brand. Never tilt forms or long text.
+- Below 900px, Files shows the list or the note, never both.
+
+## Notes
+
+A note opens as a page rendered by the server (`note_view.py`), with raw HTML escaped. Edit shows the source in a plain textarea, and Read always shows the last save. An editor library isn't worth its weight here.
 
 ## Components
 
-- **Buttons:** one `primary` per view; `.btn` secondary; `danger` outline in lists; `danger solid` only to confirm in a dialog. Sizes: default (40px) and `sm` (32px). Stretch with `wide` inside cards; dialogs right-align their actions.
+- **Buttons:** one `primary` per view; `.btn` secondary; `plain` for repeated list actions like Revoke; `danger solid` only to confirm in a dialog. Sizes: default (44px), `sm` (40px) and `big` for the one action a page exists for. Stretch with `wide` inside cards; dialogs right-align their actions.
 - **Alerts:** plain (info), `good`, `warn`, `bad`.
 - **Copyable values:** always the `ui.command` macro.
 - **Dialogs:** anything irreversible confirms and names what will happen on the button ("Revoke Claude"). Confirm when the action happens, not before.

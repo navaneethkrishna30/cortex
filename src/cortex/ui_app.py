@@ -21,6 +21,7 @@ from starlette.staticfiles import StaticFiles
 from .auth import AuthError, AuthStore
 from .config import Settings
 from .gitrepo import HUMAN
+from .note_view import render_note
 from .search import search
 from .store import Store
 from .vault import ARCHIVE, VaultError
@@ -119,6 +120,7 @@ def _tree(paths: list[str], current: str | None = None) -> dict:
         for folder in node["folders"]:
             folder["folders"].sort(key=lambda f: f["name"].lower())
             sort(folder)
+            folder["count"] = len(folder["files"]) + sum(sub["count"] for sub in folder["folders"])
 
     def mark_open(node: dict) -> None:
         """Open what has something to show; an empty folder stays shut."""
@@ -234,6 +236,16 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
         response.delete_cookie(COOKIE, path="/ui")
         return response
 
+    def vault_summary() -> dict:
+        vault = store.vault
+        paths = vault.all_paths()
+        modified = sorted(paths, key=lambda p: (vault.root / p).stat().st_mtime, reverse=True)[:8]
+        return {
+            "recent": [{"path": p, "modified": (vault.root / p).stat().st_mtime} for p in modified],
+            "overview": [{"name": name, "hint": hint, "count": sum(p.startswith(name + "/") for p in paths)}
+                         for name, hint in FOLDER_HINTS.items()],
+        }
+
     def access_page(status: int = 200, failures_only: bool = False, show_all: bool = False, **context) -> HTMLResponse:
         rows = auth.audit(500)
         if failures_only:
@@ -241,7 +253,8 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
         activity = {"audit": rows if show_all else rows[:ACTIVITY_ROWS], "failures_only": failures_only,
                     "more_activity": not show_all and len(rows) > ACTIVITY_ROWS, "activity_total": len(rows)}
         context = {"new_token": None, "new_token_name": None, "error": None, "notice": None, "error_form": None, **context}
-        return page("home.html", status, active="access", tokens=auth.list_tokens(), public_url=settings.public_url, **activity, **context)
+        return page("home.html", status, active="access", tokens=auth.list_tokens(), public_url=settings.public_url,
+                    **vault_summary(), **activity, **context)
 
     async def home(request: Request) -> Response:
         notices = {"approved": "Client approved. It will connect within a few seconds.", "denied": "Login denied.",
@@ -319,15 +332,20 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
         paths = vault.all_paths()
         base = {"path": None, "content": "", "hash": "", "error": None, "message": None, "active": "files", "new": False,
                 "q": None, "results": [], "history": None, "version": None, "new_folders": NEW_NOTE_FOLDERS,
-                "new_folder": None, "new_name": ""}
+                "new_folder": None, "new_name": "", "folder": None}
         context = {**base, **context}
         path = context["path"]
-        modified = sorted(paths, key=lambda p: (vault.root / p).stat().st_mtime, reverse=True)[:8]
-        return page("files.html", status, tree=_tree(paths, path),
+        folder = path.split("/")[0] if path else context["new_folder"] or context["folder"]
+        view, backlinks = None, []
+        if path and not context["new"] and context["history"] is None:
+            view = render_note(context["content"], path, lambda target: vault.resolve_link(target, paths))
+            backlinks = list(dict.fromkeys(row["src"] for row in store.index.backlinks(path)))
+        # A trailing slash opens that folder in the tree without selecting a file.
+        tree = _tree(paths, path or (f"{folder}/" if folder else None))
+        return page("files.html", status, tree=tree, view=view, backlinks=backlinks,
+                    tint=folder if folder in FOLDER_HINTS else None,
                     movable=bool(path) and path.split("/")[0] in MOVABLE_FOLDERS,
-                    recent=[{"path": p, "modified": (vault.root / p).stat().st_mtime} for p in modified],
-                    overview=[{"name": name, "hint": hint, "count": sum(p.startswith(name + "/") for p in paths)}
-                              for name, hint in FOLDER_HINTS.items()], **context)
+                    **vault_summary(), **context)
 
     async def files(request: Request) -> Response:
         vault = store.vault
@@ -363,7 +381,7 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
             except VaultError:
                 return files_page(404, error=f"There's no note at {path}. It may have moved or been archived.")
             return files_page(path=clean, content=vault.read_text(clean), hash=vault.hash(clean), message=message)
-        return files_page(message=message)
+        return files_page(message=message, folder=params.get("folder"))
 
     async def note_history(request: Request) -> Response:
         vault = store.vault
