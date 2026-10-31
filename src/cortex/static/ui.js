@@ -89,23 +89,42 @@ $$("[data-opens]").forEach((button) => button.addEventListener("click", () => do
 $$("dialog[data-autoopen]").forEach((open) => open.showModal());
 $$("dialog [data-close]").forEach((button) => button.addEventListener("click", () => button.closest("dialog").close()));
 
-// File filter
+// Explorer: remember which folders are open, and filter across the whole tree
+const folders = $$(".tree-list details");
+const OPEN_KEY = "cortex-open-folders";
+const readOpen = () => { try { return JSON.parse(localStorage.getItem(OPEN_KEY)); } catch { return null; } };
+const remembered = readOpen();
+if (remembered) folders.forEach((folder) => { folder.open = remembered.includes(folder.dataset.folder) || folder.dataset.keep === "1"; });
 const filter = document.getElementById("filter");
+let filtering = false;
+folders.forEach((folder) => folder.addEventListener("toggle", () => {
+  if (filtering) return;
+  const open = folders.filter((f) => f.open).map((f) => f.dataset.folder);
+  try { localStorage.setItem(OPEN_KEY, JSON.stringify(open)); } catch {}
+}));
 if (filter) {
+  let before = null;
   filter.addEventListener("input", () => {
-    const query = filter.value.toLowerCase();
-    $$(".tree details").forEach((folder) => {
-      const links = $$("a", folder);
-      links.forEach((a) => { a.hidden = !a.textContent.toLowerCase().includes(query); });
-      folder.open = query ? links.some((a) => !a.hidden) : folder.dataset.open === "1";
-      folder.hidden = Boolean(query) && !folder.open;
+    const query = filter.value.trim().toLowerCase();
+    filtering = true;
+    if (query && !before) before = new Map(folders.map((f) => [f, f.open]));
+    $$(".tree-file").forEach((file) => { file.parentElement.hidden = Boolean(query) && !file.title.toLowerCase().includes(query); });
+    $$(".tree-empty").forEach((row) => { row.hidden = Boolean(query); });
+    folders.forEach((folder) => {
+      const matches = $$(".tree-file", folder).some((file) => !file.parentElement.hidden);
+      folder.parentElement.hidden = Boolean(query) && !matches;
+      if (query) folder.open = matches;
+      else if (before) folder.open = before.get(folder);
     });
+    if (!query) before = null;
+    // Toggle events fire after this handler; only then is saving safe again.
+    setTimeout(() => { filtering = false; });
   });
 }
 
-// On a phone the list sits above the note, so fold it away once a note is open.
+// On a phone the explorer sits above the note, so fold all but the open note's folders.
 if (document.getElementById("editor") && matchMedia("(max-width: 820px)").matches) {
-  $$(".tree details").forEach((folder) => { folder.open = false; folder.dataset.open = "0"; });
+  folders.forEach((folder) => { folder.open = folder.dataset.keep === "1"; });
 }
 
 // Editor

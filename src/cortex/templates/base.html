@@ -2,10 +2,10 @@
 <title>{% block title %}Cortex{% endblock %} · Cortex</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Crect width='20' height='20' rx='4' fill='%23e8833a'/%3E%3Cpath d='M13.4 7a4.5 4.5 0 1 0 0 6' fill='none' stroke='%23161616' stroke-width='2.2'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="{% block css %}/ui/static/ui.css{% endblock %}">{% block head %}{% endblock %}</head><body>
-{% block body %}<div class="shell"><aside class="nav"><a class="brand" href="/ui" aria-label="Cortex">{{ ui.mark() }}Cortex</a>
+{% block body %}<header class="topbar"><div class="topbar-in {% block bar_class %}{% endblock %}"><a class="brand" href="/ui" aria-label="Cortex">{{ ui.mark() }}Cortex</a>
 <nav class="nav-links" aria-label="Main"><a href="/ui" {% if active == "access" %}aria-current="page"{% endif %}>Access</a><a href="/ui/files" {% if active == "files" %}aria-current="page"{% endif %}>Files</a><a href="/ui/reenroll" {% if active == "security" %}aria-current="page"{% endif %}>Security</a></nav>
-<form method="post" action="/ui/logout"><button>Log out</button></form></aside>
-<main>{% block main %}<div class="page">{% block content %}{% endblock %}</div>{% endblock %}</main></div>
+<form class="logout" method="post" action="/ui/logout"><button>Log out</button></form></div></header>
+<main>{% block main %}<div class="page">{% block content %}{% endblock %}</div>{% endblock %}</main>
 <dialog id="confirm"><form method="dialog"><h2></h2><p></p><div class="actions"><button class="btn">Cancel</button><button class="btn danger" data-yes>Revoke</button></div></form></dialog>
 {% block dialogs %}{% endblock %}{% endblock %}
 {% block scripts %}{% endblock %}<script src="/ui/static/ui.js"></script></body></html>

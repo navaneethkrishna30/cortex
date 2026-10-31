@@ -65,13 +65,42 @@ templates.filters["event_label"] = lambda name: EVENTS.get(name, (name, False))[
 templates.filters["event_bad"] = lambda name: EVENTS.get(name, (name, False))[1]
 
 
-def _tree(paths: list[str]) -> list[dict]:
-    """Group notes under their top folder, in the vault's loading order."""
-    tree = []
-    for folder, hint in FOLDER_HINTS.items():
-        files = [{"path": p, "name": p[len(folder) + 1 : -3]} for p in paths if p.startswith(folder + "/")]
-        tree.append({"name": folder, "hint": hint, "files": files})
-    return tree
+def _tree(paths: list[str], current: str | None = None) -> dict:
+    """Nest note paths into folders. The vault's own folders always show, in loading order."""
+    root = {"folders": [], "files": []}
+
+    def folder_in(parent: dict, name: str, path: str) -> dict:
+        for folder in parent["folders"]:
+            if folder["name"] == name:
+                return folder
+        top = "/" not in path
+        folder = {
+            "name": name, "path": path, "folders": [], "files": [], "hint": FOLDER_HINTS.get(path),
+            "can_add": path.split("/")[0] != "logs",
+            "has_current": bool(current and current.startswith(path + "/")),
+        }
+        folder["open"] = folder["has_current"] or (top and path != "logs")
+        parent["folders"].append(folder)
+        return folder
+
+    for name in FOLDER_HINTS:
+        folder_in(root, name, name)
+    for path in paths:
+        *folders, file_name = path.split("/")
+        node, walked = root, []
+        for name in folders:
+            walked.append(name)
+            node = folder_in(node, name, "/".join(walked))
+        node["files"].append({"path": path, "name": file_name})
+
+    def sort(node: dict) -> None:
+        node["files"].sort(key=lambda f: f["name"].lower())
+        for folder in node["folders"]:
+            folder["folders"].sort(key=lambda f: f["name"].lower())
+            sort(folder)
+
+    sort(root)
+    return root
 
 
 def _qr_data_uri(uri: str) -> str:
@@ -253,8 +282,9 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
     async def files(request: Request) -> Response:
         vault = store.vault
         path = request.query_params.get("path")
-        context = {"tree": _tree(vault.all_paths()), "path": None, "content": "", "hash": "", "error": None,
-                   "message": None, "active": "files", "new": "new" in request.query_params}
+        folder = request.query_params.get("folder", "").strip("/")
+        context = {"path": None, "content": "", "hash": "", "error": None, "message": None, "active": "files",
+                   "new": "new" in request.query_params, "prefill": f"{folder}/" if folder else ""}
         status = 200
         if request.method == "POST":
             form = await request.form()
@@ -267,8 +297,6 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
                     raise VaultError("core/ loads into every session. Tick the box below to confirm this change.")
                 result = store.write(clean, content, expected, actor=HUMAN, human=True)
                 context.update(path=clean, content=vault.read_text(clean), hash=result["hash"], message="Saved and committed.", new=False)
-                context["tree"] = _tree(vault.all_paths())
-                return page("files.html", **context)
             except VaultError as error:
                 context.update(path=path, content=content, hash=expected or "", error=str(error), new=not expected)
                 status = 409
@@ -279,7 +307,7 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
             except VaultError as error:
                 context.update(error=str(error))
                 status = 404
-        return page("files.html", status, **context)
+        return page("files.html", status, tree=_tree(vault.all_paths(), context["path"]), **context)
 
     static = Path(__file__).parent / "static"
     return Starlette(routes=[
