@@ -7,9 +7,8 @@
 
 * { box-sizing: border-box; }
 html { scrollbar-gutter: stable; }
-body { margin: 0; min-height: 100dvh; padding: var(--s-5) var(--s-5) var(--s-8); background: var(--ground); color: var(--on-ground); font: 500 var(--text-md); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+body { margin: 0; min-height: 100dvh; background: var(--ground); color: var(--on-ground); font: 500 var(--text-md); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
 body.tinted { --ground: var(--folder); --on-ground: var(--ink); }
-body:has(.auth) { padding: 0; }
 h1, h2, h3, p, dl, dd, ol { margin: 0; padding: 0; }
 h1 { font: 800 var(--text-display); letter-spacing: -.05em; }
 h2 { font: 800 var(--text-2xl); letter-spacing: -.03em; }
@@ -22,9 +21,13 @@ code, .mono { font: var(--code); }
 [hidden] { display: none !important; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 
-/* Shell */
-.topbar { max-width: var(--wrap); margin: 0 auto var(--s-6); }
-.topbar-in { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-4) var(--s-5); }
+/* Shell: the window never scrolls. The top bar stays put and everything below it scrolls inside main or its panes. */
+html:has(.topbar) { height: 100dvh; overflow: hidden; scrollbar-gutter: auto; }
+body:has(.topbar) { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+body:has(.topbar) > main { flex: 1; min-height: 0; overflow-y: auto; padding: 0 var(--s-5) var(--s-5); }
+body:has(.topbar) > main:has(.files) { overflow: hidden; }
+.topbar { flex: none; padding: var(--s-4) var(--s-5); }
+.topbar-in { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-4) var(--s-5); max-width: var(--wrap); margin: 0 auto; }
 .brand { display: inline-block; padding: 0 var(--s-5) var(--s-2); font: 800 40px/44px var(--sans); letter-spacing: -.03em; color: var(--ink); background: var(--yellow); border: var(--border); box-shadow: var(--shadow-sm); text-decoration: none; transform: rotate(-2deg); }
 body.tinted .brand { color: var(--yellow); background: var(--ink); }
 .nav-links { display: flex; flex-wrap: wrap; flex: 1 1 200px; gap: var(--s-2); }
@@ -184,14 +187,18 @@ dialog .actions { justify-content: flex-end; margin-top: var(--s-6); }
 .error-page p { margin-bottom: var(--s-6); }
 
 /* Files: coloured folder cards beside the note */
-.files { display: grid; grid-template-columns: var(--explorer) minmax(0, 1fr); gap: var(--s-6); align-items: start; max-width: var(--wrap); margin: 0 auto; }
-.tree { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; color: var(--ink); }
+.files { display: grid; grid-template-columns: var(--explorer) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: var(--s-6); height: 100%; max-width: var(--wrap); margin: 0 auto; }
+.tree { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; min-height: 0; color: var(--ink); }
 .tree-head { display: flex; flex-direction: column; gap: var(--s-3); }
 .tree-head h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .tree-head .btn { color: var(--ink-inverse); background: var(--ink); }
 .tree-filter input { font: 500 var(--code); }
 .tree-none { padding: var(--s-3); font: 700 var(--text-sm); color: var(--on-ground); }
 .tree-none button { padding: 0; color: inherit; background: none; border: 0; cursor: pointer; font: inherit; text-decoration: underline; }
+.tree-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 var(--s-3) var(--s-3) 0; }
+.tree-archive { margin-top: var(--s-4); }
+.tree-archive .when-open, .tree-archive[open] .when-shut { display: none; }
+.tree-archive[open] .when-open { display: inline; }
 .tree-list ul { margin: 0; padding: 0; list-style: none; }
 .tree-list > ul { display: flex; flex-direction: column; gap: var(--s-4); }
 .tree-list ul ul ul { margin-left: var(--s-4); padding-left: var(--s-3); border-left: 2px solid var(--line); }
@@ -211,8 +218,9 @@ details[open] > summary .chevron { transform: rotate(90deg); }
 .tree-add:hover { color: var(--ink-inverse); background: var(--ink); }
 .tree-empty { font: 500 var(--text-sm); }
 
-.editor-pane { position: relative; min-width: 0; color: var(--ink); background: var(--sheet); border: var(--border); border-radius: 18px; box-shadow: var(--shadow-lg); padding: var(--s-5) clamp(16px, 3.5vw, 44px) var(--s-8); }
-.editor-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3); margin-bottom: var(--s-6); }
+.editor-pane { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow-y: auto; color: var(--ink); background: var(--sheet); border: var(--border); border-radius: 18px; box-shadow: var(--shadow-lg); padding: 0 clamp(16px, 3.5vw, 44px) var(--s-5); }
+.editor-form { display: flex; flex-direction: column; flex: 1 0 auto; }
+.editor-head { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3); padding: var(--s-5) 0 var(--s-4); margin-bottom: var(--s-3); background: var(--sheet); }
 .editor-title { display: flex; align-items: center; gap: var(--s-3); flex: 1 1 220px; min-width: 0; }
 .editor-head h1, .editor-path { font: var(--code); letter-spacing: 0; overflow-wrap: anywhere; }
 .back-link { display: none; flex: none; font: 700 var(--text-sm); }
@@ -221,7 +229,10 @@ details[open] > summary .chevron { transform: rotate(90deg); }
 .segmented button[aria-pressed=true] { color: var(--ink-inverse); background: var(--ink); }
 .dirty { position: absolute; top: 64px; right: var(--s-6); z-index: 1; display: grid; place-items: center; width: 104px; height: 104px; font: 800 16px/18px var(--sans); text-align: center; background: var(--link-mark); clip-path: polygon(50% 0, 61% 12%, 75% 7%, 79% 21%, 93% 25%, 88% 39%, 100% 50%, 88% 61%, 93% 75%, 79% 79%, 75% 93%, 61% 88%, 50% 100%, 39% 88%, 25% 93%, 21% 79%, 7% 75%, 12% 61%, 0 50%, 12% 39%, 7% 25%, 21% 21%, 25% 7%, 39% 12%); transform: rotate(10deg); }
 .editor-notes:empty { display: none; }
-.editor-body textarea { display: block; width: 100%; min-height: 62dvh; padding: var(--s-4); font: var(--editor); color: var(--ink); background: var(--sheet); border: var(--border); border-radius: var(--radius-sm); resize: vertical; }
+/* The source fills whatever height the pane has left and scrolls itself. */
+.editor-body { display: flex; flex: 1 1 auto; min-height: 240px; }
+.editor-body label { display: flex; flex: 1; min-width: 0; }
+.editor-body textarea { flex: 1; min-width: 0; padding: var(--s-4); font: var(--editor); color: var(--ink); background: var(--sheet); border: var(--border); border-radius: var(--radius-sm); resize: none; }
 
 /* The note as a page */
 .kicker { display: inline-block; padding: 0 var(--s-4); font-weight: 800; background: var(--folder); border: var(--border); transform: rotate(-2deg); }
@@ -258,7 +269,8 @@ details[open] > summary .chevron { transform: rotate(90deg); }
 .menu-list .menu-danger { color: var(--danger); }
 
 /* Overview, search and history lists in the note pane */
-.overview { width: 100%; max-width: var(--prose); }
+.overview { flex: none; width: 100%; max-width: var(--prose); padding-top: var(--s-5); }
+.editor-head + .overview { padding-top: 0; }
 .overview h2 { margin-bottom: var(--s-3); }
 .overview > section { margin-bottom: var(--s-7); }
 .list { margin: 0; padding: 0; list-style: none; border-top: var(--border); }
@@ -274,14 +286,20 @@ details[open] > summary .chevron { transform: rotate(90deg); }
 
 /* Narrow screens: one pane at a time. */
 @media (max-width: 900px) {
-  .files { display: block; }
+  .files { grid-template-columns: minmax(0, 1fr); }
   .files.has-pane .tree { display: none; }
   .files:not(.has-pane) .editor-pane { display: none; }
   .back-link { display: inline; }
   .dirty { position: static; width: auto; height: auto; margin-bottom: var(--s-3); padding: 0 var(--s-3); clip-path: none; transform: none; border: 2px solid var(--line); justify-self: start; }
 }
 @media (max-width: 520px) {
-  body { padding: var(--s-3) var(--s-3) var(--s-7); }
+  .topbar { padding: var(--s-3); }
+  .topbar-in { gap: var(--s-2) var(--s-3); }
+  .topbar .brand { padding: 0 var(--s-3) var(--s-1); font-size: 26px; line-height: 32px; }
+  .nav-links { order: 1; flex-basis: 100%; }
+  .nav-links a, .nav-quiet { height: var(--control-sm); }
+  .nav-quiet { margin-left: auto; padding: 0 var(--s-3); }
+  body:has(.topbar) > main { padding: 0 var(--s-3) var(--s-3); }
   .path-fields { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .btn.big { width: 100%; }
   .page { box-shadow: var(--shadow); }

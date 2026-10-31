@@ -122,15 +122,7 @@ def _tree(paths: list[str], current: str | None = None) -> dict:
             sort(folder)
             folder["count"] = len(folder["files"]) + sum(sub["count"] for sub in folder["folders"])
 
-    def mark_open(node: dict) -> None:
-        """Open what has something to show; an empty folder stays shut."""
-        for folder in node["folders"]:
-            mark_open(folder)
-            has_content = bool(folder["files"] or folder["folders"])
-            folder["open"] = folder["has_current"] or ("/" not in folder["path"] and folder["path"] != "logs" and has_content)
-
     sort(root)
-    mark_open(root)
     return root
 
 
@@ -342,8 +334,8 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
             backlinks = list(dict.fromkeys(row["src"] for row in store.index.backlinks(path)))
         # A trailing slash opens that folder in the tree without selecting a file.
         tree = _tree(paths, path or (f"{folder}/" if folder else None))
-        return page("files.html", status, tree=tree, view=view, backlinks=backlinks,
-                    tint=folder if folder in FOLDER_HINTS else None,
+        return page("files.html", status, tree=tree, archive=vault.archive_paths(), view=view, backlinks=backlinks,
+                    tint="archive" if folder == ARCHIVE else folder if folder in FOLDER_HINTS else None,
                     movable=bool(path) and path.split("/")[0] in MOVABLE_FOLDERS,
                     **vault_summary(), **context)
 
@@ -377,7 +369,7 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
         path = params.get("path")
         if path:
             try:
-                clean = vault.clean(path, must_exist=True)
+                clean = vault.clean(path, must_exist=True, archive_ok=True)
             except VaultError:
                 return files_page(404, error=f"There's no note at {path}. It may have moved or been archived.")
             return files_page(path=clean, content=vault.read_text(clean), hash=vault.hash(clean), message=message)
@@ -387,7 +379,7 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
         vault = store.vault
         path, rev = request.query_params.get("path", ""), request.query_params.get("rev", "")
         try:
-            clean = vault.clean(path, must_exist=True)
+            clean = vault.clean(path, must_exist=True, archive_ok=True)
         except VaultError:
             return files_page(404, error=f"There's no note at {path}. It may have moved or been archived.")
         version = store.git.show(rev, clean) if re.fullmatch(r"[0-9a-f]{40}", rev) else None

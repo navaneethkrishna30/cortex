@@ -103,8 +103,9 @@ $$("dialog[data-autoopen]").forEach((open) => open.showModal());
 $$("dialog [data-close]").forEach((button) => button.addEventListener("click", () => button.closest("dialog").close()));
 
 // Explorer: remember which folders are open, and filter across the whole tree
-const folders = $$(".tree-list details");
-const OPEN_KEY = "cortex-open-folders";
+const folders = $$(".tree-list details[data-folder]");
+const liveFiles = $$(".tree-list details[data-folder] .tree-file");
+const OPEN_KEY = "cortex-opened-folders";
 const readOpen = () => { try { return JSON.parse(localStorage.getItem(OPEN_KEY)); } catch { return null; } };
 const remembered = readOpen();
 if (remembered) folders.forEach((folder) => { folder.open = remembered.includes(folder.dataset.folder) || folder.dataset.keep === "1"; });
@@ -112,7 +113,8 @@ const filter = document.getElementById("filter");
 let filtering = false;
 folders.forEach((folder) => folder.addEventListener("toggle", () => {
   if (filtering) return;
-  const open = folders.filter((f) => f.open).map((f) => f.dataset.folder);
+  // A folder held open for the current note isn't one you chose to open.
+  const open = folders.filter((f) => f.open && f.dataset.keep !== "1").map((f) => f.dataset.folder);
   try { localStorage.setItem(OPEN_KEY, JSON.stringify(open)); } catch {}
 }));
 if (filter) {
@@ -121,7 +123,7 @@ if (filter) {
     const query = filter.value.trim().toLowerCase();
     filtering = true;
     if (query && !before) before = new Map(folders.map((f) => [f, f.open]));
-    $$(".tree-file").forEach((file) => { file.parentElement.hidden = Boolean(query) && !file.title.toLowerCase().includes(query); });
+    liveFiles.forEach((file) => { file.parentElement.hidden = Boolean(query) && !file.title.toLowerCase().includes(query); });
     $$(".tree-empty").forEach((row) => { row.hidden = Boolean(query); });
     folders.forEach((folder) => {
       const matches = $$(".tree-file", folder).some((file) => !file.parentElement.hidden);
@@ -129,7 +131,7 @@ if (filter) {
       if (query) folder.open = matches;
       else if (before) folder.open = before.get(folder);
     });
-    document.getElementById("tree-none").hidden = !query || $$(".tree-file").some((file) => !file.parentElement.hidden);
+    document.getElementById("tree-none").hidden = !query || liveFiles.some((file) => !file.parentElement.hidden);
     if (!query) before = null;
     // Toggle events fire after this handler; only then is saving safe again.
     setTimeout(() => { filtering = false; });

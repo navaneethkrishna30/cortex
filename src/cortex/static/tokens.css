@@ -65,3 +65,4 @@
 .f-entities { --folder: var(--cyan); }
 .f-docs { --folder: var(--lime); }
 .f-logs { --folder: var(--lilac); }
+.f-archive { --folder: var(--gray-light); }

@@ -31,15 +31,17 @@ Bricolage Grotesque for everything people read, with weight 800 for headings. DM
 
 ## Layout
 
+- The window itself never scrolls. The top bar stays fixed and the content below it scrolls; on Files, the tree and the note pane each scroll on their own.
 - The top bar is the same on every page. Authenticator is a quiet link beside Log out, because it's rare.
 - Page content sits on a sheet in the centred `--wrap` column. Single forms use `--form`.
 - Folder tabs stick out of the top of the Access sheet.
 - Small tilts are for stickers: client cards, failed events, the brand. Never tilt forms or long text.
 - Below 900px, Files shows the list or the note, never both.
+- Tree folders start closed, apart from the one holding the open note, and remember what you open. `.archive/` stays behind "Show archive".
 
 ## Notes
 
-A note opens as a page rendered by the server (`note_view.py`), with raw HTML escaped. Edit shows the source in a plain textarea, and Read always shows the last save. An editor library isn't worth its weight here.
+A note opens as a page rendered by the server (`note_view.py`), with raw HTML escaped. Edit shows the source in a plain textarea that fills the pane, and Read always shows the last save. Archived notes and logs/ open read-only. An editor library isn't worth its weight here.
 
 ## Components
 

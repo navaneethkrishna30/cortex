@@ -75,6 +75,10 @@ class Vault:
                     found.append(relative)
         return sorted(found)
 
+    def archive_paths(self) -> list[str]:
+        base = self.root / ARCHIVE
+        return sorted(file.relative_to(self.root).as_posix() for file in base.rglob("*.md")) if base.is_dir() else []
+
     def resolve_link(self, target: str, paths: list[str] | None = None) -> str | None:
         """[[docs/plan]] is a path; [[cortex]] matches by file name, entities first."""
         target = target.strip().removesuffix(".md")

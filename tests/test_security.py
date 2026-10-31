@@ -77,6 +77,30 @@ def rpc(client, token, method, params=None):
     return response.json()
 
 
+def test_archived_note_opens_read_only_behind_the_toggle(world):
+    auth, _, ui, store = world
+    enrol(auth, ui)
+    store.write("docs/guide.md", "# Guide\nStriped zebras.\n", actor="a")
+    store.move("docs/guide.md", ".archive/docs/guide.md", actor="a")
+    listing = ui.get("/ui/files")
+    assert "Show archive" in listing.text and 'class="drawer f-archive tree-archive" >' in listing.text
+    page = ui.get("/ui/files", params={"path": ".archive/docs/guide.md"})
+    assert page.status_code == 200 and "Striped zebras" in page.text
+    assert 'id="editor"' not in page.text and 'class="drawer f-archive tree-archive" open>' in page.text
+    refused = ui.post("/ui/files", data={"path": ".archive/docs/guide.md", "content": "x", "hash": "y"})
+    assert refused.status_code == 409 and "Striped zebras" in store.read(".archive/docs/guide.md")["content"]
+
+
+def test_folders_start_collapsed_except_the_current_one(world):
+    auth, _, ui, store = world
+    enrol(auth, ui)
+    store.write("docs/guide.md", "# Guide\nv1\n", actor="a")
+    store.write("memory/fact.md", "A fact.", actor="a")
+    assert 'open data-folder' not in ui.get("/ui/files").text
+    page = ui.get("/ui/files", params={"path": "docs/guide.md"})
+    assert 'open data-folder="docs"' in page.text and 'open data-folder="memory"' not in page.text
+
+
 def test_invariant_1_server_generates_codes_without_clashes(world):
     auth = world[0]
     client = auth.register_client("c", [REDIRECT], [REDIRECT])
