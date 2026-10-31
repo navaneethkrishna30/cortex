@@ -117,8 +117,8 @@ class Store:
         self._check_secret(reason + " " + " ".join(format_value(v) for v in fields.values()))
         if not fields or not reason.strip():
             raise VaultError("update needs at least one field and a reason")
-        if "status" in fields or set(fields) & SYSTEM_LINK_KEYS:
-            raise VaultError("status changes go through supersede, or move to .archive/ to forget")
+        if set(fields) & SYSTEM_LINK_KEYS:
+            raise VaultError("superseded_by is set by supersede; use that to replace a note")
         with self.lock:
             self._check_hash(clean, expected_hash)
             text = self.vault.read_text(clean)
@@ -182,18 +182,24 @@ class Store:
                     changes[other] = rewritten
             (self.vault.root / source).unlink()
             self.index.remove_file(source, relink=False)
-            return self._save(changes, f"move: {source} -> {target}", actor, target, removed=[source])
+            linked_from = sorted(path for path in changes if path != target)
+            result = self._save(changes, f"move: {source} -> {target}", actor, target, removed=[source])
+            return {**result, "linked_from": linked_from}
 
-    def save_log(self, kind: str, text: str, *, actor: str) -> dict:
+    def save_log(self, kind: str, text: str, day: str | None = None, *, actor: str) -> dict:
         if kind not in LOG_FOLDERS:
             raise VaultError(f"kind must be one of {sorted(LOG_FOLDERS)}")
         self._check_secret(text)
         now = datetime.now()
-        path = f"logs/{LOG_FOLDERS[kind]}/{now:%Y-%m-%d}.md"
+        today = f"{now:%Y-%m-%d}"
+        day = _log_day(day) if day else today
+        path = f"logs/{LOG_FOLDERS[kind]}/{day}.md"
+        # An entry added to another day says when it was really written.
+        heading = f"{now:%H:%M:%S}" if day == today else f"added {today} {now:%H:%M:%S}"
         with self.lock:
             full = self.vault.root / path
-            existing = full.read_text() if full.exists() else f"# {kind} {now:%Y-%m-%d}\n"
-            entry = f"{existing.rstrip()}\n\n## {now:%H:%M:%S} ({actor})\n{text.strip()}\n"
+            existing = full.read_text() if full.exists() else f"# {kind} {day}\n"
+            entry = f"{existing.rstrip()}\n\n## {heading} ({actor})\n{text.strip()}\n"
             return self._save({path: entry}, f"log: {path}", actor, path)
 
     def sync_outside_edits(self) -> list[str]:
@@ -318,6 +324,13 @@ def _plain(value) -> str:
     if links:
         return ", ".join(f"[[{link}]]" for link in links)
     return str(value)
+
+
+def _log_day(day: str) -> str:
+    try:
+        return datetime.strptime(day, "%Y-%m-%d").date().isoformat()
+    except ValueError:
+        raise VaultError(f"date must be YYYY-MM-DD, got {day!r}") from None
 
 
 def _with_status(content: str) -> str:

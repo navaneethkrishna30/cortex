@@ -6,7 +6,11 @@ import sqlite_vec
 
 from .index import Index, fts_query
 
-DEFAULT_FOLDERS = ("core", "memory", "entities")
+DEFAULT_FOLDERS = ("memory", "entities")
+# Already in every session's context, so a search result would only repeat it.
+UNSEARCHED_FOLDER = "core"
+DEFAULT_LIMIT = 8
+MIN_SHARE_OF_TOP_SCORE = 0.5
 RRF_K = 60
 CANDIDATES = 50
 
@@ -47,7 +51,7 @@ def _excluded(index: Index, query: str, scope: str, hidden: dict[str, str]) -> l
     return excluded
 
 
-def search(index: Index, query: str, scope: str | None = None, exact: bool = False, limit: int = 10) -> dict:
+def search(index: Index, query: str, scope: str | None = None, exact: bool = False, limit: int = DEFAULT_LIMIT) -> dict:
     with index.lock:
         if exact:
             return _exact(index, query, scope, limit)
@@ -57,16 +61,20 @@ def search(index: Index, query: str, scope: str | None = None, exact: bool = Fal
                 scores[rowid] = scores.get(rowid, 0.0) + 1.0 / (RRF_K + position + 1)
         results: dict[str, dict] = {}
         hidden: dict[str, str] = {}
+        top_score = None
         for rowid in sorted(scores, key=scores.__getitem__, reverse=True):
+            if top_score is not None and scores[rowid] < top_score * MIN_SHARE_OF_TOP_SCORE:
+                break
             row = index.db.execute(
                 "SELECT c.path, c.heading, c.text, f.folder, f.status, f.title FROM chunks c "
                 "JOIN files f USING(path) WHERE c.id=?", (rowid,)
             ).fetchone()
-            if row is None or (scope != "all" and row["folder"] not in DEFAULT_FOLDERS):
+            if row is None or row["folder"] == UNSEARCHED_FOLDER or (scope != "all" and row["folder"] not in DEFAULT_FOLDERS):
                 continue
             if row["status"] != "current":
                 hidden[row["path"]] = row["status"]
                 continue
+            top_score = top_score or scores[rowid]
             if row["path"] not in results and len(results) < limit:
                 results[row["path"]] = {
                     "path": row["path"], "title": row["title"], "heading": row["heading"],
@@ -78,7 +86,9 @@ def search(index: Index, query: str, scope: str | None = None, exact: bool = Fal
 def _exact(index: Index, query: str, scope: str | None, limit: int) -> dict:
     needle = query.lower()
     results, hidden = [], {}
-    rows = index.db.execute("SELECT path, folder, status FROM files ORDER BY path").fetchall()
+    rows = index.db.execute(
+        "SELECT path, folder, status FROM files WHERE folder != ? ORDER BY path", (UNSEARCHED_FOLDER,)
+    ).fetchall()
     outside: dict[str, int] = {}
     for row in rows:
         text = index.vault.read_text(row["path"])

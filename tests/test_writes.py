@@ -116,6 +116,79 @@ def test_move_rewrites_links_and_archive_forgets(store):
     assert store.git.dirty_paths() == []
 
 
+def test_archive_stays_out_of_every_search_but_still_opens(store):
+    store.write("docs/zebras.md", "# Zebras\nStriped zebras live here.\n", actor="a")
+    store.move("docs/zebras.md", ".archive/docs/zebras.md", actor="a")
+    for scope in (None, "all"):
+        for exact in (False, True):
+            found = search(store.index, "zebras", scope, exact)
+            assert not found["results"] and not found["excluded"]
+    assert "Striped" in store.read(".archive/docs/zebras.md")["content"]
+
+
+def test_sync_clears_archived_notes_already_in_the_index(store):
+    store.write("docs/zebras.md", "# Zebras\nStriped zebras live here.\n", actor="a")
+    store.index.db.execute("UPDATE files SET path='.archive/zebras.md', folder='.archive' WHERE path='docs/zebras.md'")
+    store.index.db.execute("UPDATE chunks SET path='.archive/zebras.md' WHERE path='docs/zebras.md'")
+    store.index.db.execute("UPDATE chunks_fts SET path='.archive/zebras.md' WHERE path='docs/zebras.md'")
+    store.index.sync()
+    assert not [r for r in search(store.index, "zebras", "all")["results"] if r["path"].startswith(".archive")]
+
+
+def test_search_drops_weak_results_and_core(store):
+    (store.vault.root / "core/profile.md").write_text("# Profile\nOwns a laptop.\n")
+    store.index.sync()
+    store.write("memory/laptop.md", "The laptop runs Linux.", actor="a")
+    for name in ("oven", "garden", "piano"):
+        store.write(f"memory/{name}.md", f"The {name} is in the house.", actor="a")
+    paths = [r["path"] for r in search(store.index, "laptop")["results"]]
+    assert paths == ["memory/laptop.md"]
+    assert not search(store.index, "laptop", "all", exact=True)["results"][1:]
+    assert not [r for r in search(store.index, "profile", "all")["results"] if r["path"].startswith("core/")]
+
+
+def test_search_returns_eight_results_by_default(store):
+    for n in range(12):
+        store.write(f"entities/box-{n}.md", f"# Box {n}\nA zebra lives here.\n", actor="a")
+    assert len(search(store.index, "zebra")["results"]) == 8
+
+
+def test_update_can_change_status_with_a_history_line(store):
+    made = store.write("docs/guide.md", "---\nstatus: unread\n---\n# Guide\nStriped zebras.\n", actor="a")
+    assert not search(store.index, "zebras", "all")["results"]
+    store.update("docs/guide.md", {"status": "current"}, "read it", made["hash"], actor="a")
+    assert "status unread -> current (read it)" in store.vault.read_text("docs/guide.md")
+    assert search(store.index, "zebras", "all")["results"]
+
+
+def test_update_still_refuses_superseded_by(store):
+    made = store.write("docs/guide.md", "# Guide\nv1\n", actor="a")
+    with pytest.raises(VaultError, match="supersede"):
+        store.update("docs/guide.md", {"superseded_by": "[[x]]"}, "no", made["hash"], actor="a")
+
+
+def test_save_log_can_backfill_a_date(store):
+    made = store.save_log("daily", "old note", "2026-01-15", actor="a")
+    assert made["path"] == "logs/daily/2026-01-15.md"
+    text = store.vault.read_text(made["path"])
+    assert text.startswith("# daily 2026-01-15\n") and "## added " in text and "old note" in text
+
+
+@pytest.mark.parametrize("bad", ["yesterday", "2026-13-01", "../../x", "2026-01-15/../x"])
+def test_save_log_refuses_a_bad_date(store, bad):
+    with pytest.raises(VaultError, match="YYYY-MM-DD"):
+        store.save_log("daily", "note", bad, actor="a")
+
+
+def test_move_reports_live_notes_still_linking(store):
+    store.write("docs/guide.md", "# Guide\nv1\n", actor="a")
+    store.write("entities/app.md", "# App\nSee [[docs/guide]].\n", actor="a")
+    store.write("docs/other.md", "# Other\nNo links.\n", actor="a")
+    result = store.move("docs/guide.md", ".archive/docs/guide.md", actor="a")
+    assert result["linked_from"] == ["entities/app.md"]
+    assert "[[.archive/docs/guide]]" in store.vault.read_text("entities/app.md")
+
+
 def test_save_log_appends_and_search_reports_it(store):
     store.save_log("daily", "talked about zebras", actor="a")
     store.save_log("daily", "more zebras", actor="a")

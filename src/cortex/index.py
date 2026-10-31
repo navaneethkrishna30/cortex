@@ -10,7 +10,7 @@ import sqlite_vec
 
 from .embed import Embedder
 from .notes import body_links, chunks, parse, relation_edges, sha256
-from .vault import Vault
+from .vault import ARCHIVE, Vault
 
 STOPWORDS = set("a an and are as at be by for from how i in is it my of on or that the to was what when where which who why with".split())
 
@@ -104,6 +104,9 @@ class Index:
             return changed
 
     def index_file(self, path: str, relink: bool = True) -> None:
+        # Archived notes open by path but are never searched.
+        if path.split("/")[0] == ARCHIVE:
+            return
         with self.lock:
             text = self.vault.read_text(path)
             note = parse(text)
