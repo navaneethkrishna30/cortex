@@ -3,6 +3,8 @@ name = "cortex"
 version = "0.1.0"
 description = "Local-first memory layer for AI agents: markdown notes, a SQLite index, one MCP server"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     { name = "Navaneeth Krishna" }
 ]

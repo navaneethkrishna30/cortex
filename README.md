@@ -119,3 +119,7 @@ uv run cortex --vault "$(mktemp -d)" doctor
 ```
 
 `tests/eval` holds a small search eval. Copy its vault somewhere temporary before running it. UI conventions are in [DESIGN.md](DESIGN.md).
+
+## License
+
+[MIT](LICENSE)
