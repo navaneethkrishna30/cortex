@@ -75,8 +75,8 @@ def build_mcp(store: Store, instructions: str) -> CortexMCP:
     async def read(path: str) -> dict:
         """Read a note: content, hash, links, backlinks with relation types, and History.
         read("@context") returns core/ plus the memory index, for clients that dropped the server
-        instructions. Memory is the summary; follow [[links]] only when the task needs more, at
-        most 2 hops. If memory and an older doc disagree, memory wins."""
+        instructions. Memory is the summary; follow [[links]] only when the task needs more.
+        If memory and an older doc disagree, memory wins."""
         return await _call(store.read, path)
 
     @mcp.tool(name="list")
@@ -118,8 +118,7 @@ def build_mcp(store: Store, instructions: str) -> CortexMCP:
     @mcp.tool()
     async def save_log(kind: str, text: str, date: str | None = None) -> dict:
         """Append to logs/: kind is "daily", "debrief" or "raw". Append-only. date is YYYY-MM-DD and
-        defaults to today; set it only to backfill an older day. Write debriefs only when the user
-        runs /debrief."""
+        defaults to today; set it only to backfill an older day."""
         return await _call(store.save_log, kind, text, date, actor=_actor())
 
     return mcp
