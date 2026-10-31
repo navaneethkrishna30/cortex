@@ -136,6 +136,11 @@ if (filter) {
     // Toggle events fire after this handler; only then is saving safe again.
     setTimeout(() => { filtering = false; });
   });
+  document.getElementById("collapse-all").addEventListener("click", () => {
+    $$(".tree-list details").forEach((folder) => { folder.open = false; });
+    // Clearing a filter must not reopen what was just collapsed.
+    if (before) before = new Map(folders.map((f) => [f, false]));
+  });
   document.getElementById("filter-clear").addEventListener("click", () => {
     filter.value = "";
     filter.dispatchEvent(new Event("input"));

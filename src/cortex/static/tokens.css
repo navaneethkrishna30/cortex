@@ -42,7 +42,7 @@
   --text-xl: 28px/32px var(--sans);
   --text-2xl: 36px/40px var(--sans);
   --text-display: clamp(64px, 9vw, 112px)/.95 var(--sans);
-  --text-note: clamp(56px, 9vw, 128px)/.92 var(--sans);
+  --text-note: clamp(32px, 3.5vw, 40px)/1.1 var(--sans);
   --code: 14px/24px var(--mono);
   --editor: 15px/26px var(--mono);
   --display-code: 32px/40px var(--mono);

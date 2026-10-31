@@ -59,7 +59,6 @@ FOLDER_HINTS = {
 
 NEW_NOTE_FOLDERS = [name for name in FOLDER_HINTS if name != "logs"]
 MOVABLE_FOLDERS = ("memory", "entities", "docs")
-ACTIVITY_ROWS = 10
 DETAILS = {"invalid_grant": "Expired or invalid sign-in", "bad setup token": ""}
 
 
@@ -238,23 +237,20 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
                          for name, hint in FOLDER_HINTS.items()],
         }
 
-    def access_page(status: int = 200, failures_only: bool = False, show_all: bool = False, **context) -> HTMLResponse:
+    def access_page(status: int = 200, failures_only: bool = False, **context) -> HTMLResponse:
         rows = auth.audit(500)
         if failures_only:
             rows = [row for row in rows if EVENTS.get(row["event"], ("", False))[1]]
-        activity = {"audit": rows if show_all else rows[:ACTIVITY_ROWS], "failures_only": failures_only,
-                    "more_activity": not show_all and len(rows) > ACTIVITY_ROWS, "activity_total": len(rows)}
         context = {"new_token": None, "new_token_name": None, "error": None, "notice": None, "error_form": None, **context}
         return page("home.html", status, active="access", tokens=auth.list_tokens(), public_url=settings.public_url,
-                    **vault_summary(), **activity, **context)
+                    audit=rows, failures_only=failures_only, **vault_summary(), **context)
 
     async def home(request: Request) -> Response:
         notices = {"approved": "Client approved. It will connect within a few seconds.", "denied": "Login denied.",
                    "revoked": "Access revoked.", "expired": "That login request expired. Start again from the client."}
         notice = notices.get(request.query_params.get("done", ""))
         return access_page(notice=notice, welcome="welcome" in request.query_params,
-                           failures_only=request.query_params.get("activity") == "failures",
-                           show_all="all" in request.query_params)
+                           failures_only=request.query_params.get("activity") == "failures")
 
     async def enter_code(request: Request) -> Response:
         """Invariant 3: a login code is accepted only here, behind a fresh TOTP."""

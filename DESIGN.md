@@ -35,17 +35,19 @@ Bricolage Grotesque for everything people read, with weight 800 for headings. DM
 - The top bar is the same on every page. Authenticator is a quiet link beside Log out, because it's rare.
 - Page content sits on a sheet in the centred `--wrap` column. Single forms use `--form`.
 - Folder tabs stick out of the top of the Access sheet.
+- Clients and Activity show four rows; "Show more" opens the rest in their own scroller.
 - Small tilts are for stickers: client cards, failed events, the brand. Never tilt forms or long text.
 - Below 900px, Files shows the list or the note, never both.
-- Tree folders start closed, apart from the one holding the open note, and remember what you open. `.archive/` stays behind "Show archive".
+- Tree folders start closed, apart from the one holding the open note, and remember what you open. A button beside the filter collapses them all. `.archive/` stays behind "Show archive".
 
 ## Notes
 
-A note opens as a page rendered by the server (`note_view.py`), with raw HTML escaped. Edit shows the source in a plain textarea that fills the pane, and Read always shows the last save. Archived notes and logs/ open read-only. An editor library isn't worth its weight here.
+A note opens as a page rendered by the server (`note_view.py`), with raw HTML escaped. Edit shows the source in a plain textarea that fills the pane, and Read always shows the last save. Archived notes and logs/ open read-only. An editor library isn't worth its weight here. The title stays modest so the note gets the room, and frontmatter sits in a small table with field names on the folder's colour.
 
 ## Components
 
-- **Buttons:** one `primary` per view; `.btn` secondary; `plain` for repeated list actions like Revoke; `danger solid` only to confirm in a dialog. Sizes: default (44px), `sm` (40px) and `big` for the one action a page exists for. Stretch with `wide` inside cards; dialogs right-align their actions.
+- **Buttons:** one `primary` per view; `.btn` secondary; `plain` for repeated list actions like Revoke; `danger solid` only to confirm in a dialog. Sizes: default (44px), `sm` (40px) and `big` for the one action a page exists for. `icon` is square, for tools that need a label only for screen readers and a tooltip. Stretch with `wide` inside cards; dialogs right-align their actions.
+- **Switchers:** `.segmented` is a tinted track with a bordered thumb around the current choice, never a solid fill.
 - **Alerts:** plain (info), `good`, `warn`, `bad`.
 - **Copyable values:** always the `ui.command` macro.
 - **Dialogs:** anything irreversible confirms and names what will happen on the button ("Revoke Claude"). Confirm when the action happens, not before.
