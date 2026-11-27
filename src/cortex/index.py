@@ -179,6 +179,16 @@ class Index:
         rows = self.db.execute("SELECT src, relation FROM edges WHERE dst=? AND src != ?", (path, path))
         return [dict(row) for row in rows]
 
+    def neighbours(self, path: str) -> dict[str, list[str]]:
+        """Paths this note links to and is linked from, so a search hit can be followed without another search."""
+        links = self.db.execute(
+            "SELECT DISTINCT dst FROM edges WHERE src=? AND dst IS NOT NULL AND dst != src ORDER BY dst", (path,)
+        )
+        backlinks = self.db.execute(
+            "SELECT DISTINCT src FROM edges WHERE dst=? AND src != dst ORDER BY src", (path,)
+        )
+        return {"links": [row["dst"] for row in links], "backlinks": [row["src"] for row in backlinks]}
+
     def broken_links(self) -> list[dict]:
         rows = self.db.execute(
             "SELECT src, target FROM edges WHERE dst IS NULL AND src NOT LIKE 'logs/%' ORDER BY src"

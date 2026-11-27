@@ -81,6 +81,7 @@ def search(index: Index, query: str, scope: str | None = None, exact: bool = Fal
                 results[row["path"]] = {
                     "path": row["path"], "title": row["title"], "heading": row["heading"],
                     "snippet": row["text"][:400], "score": round(scores[rowid], 4),
+                    **index.neighbours(row["path"]),
                 }
         return {"results": list(results.values()), "excluded": _excluded(index, query, scope, hidden)}
 
@@ -103,7 +104,10 @@ def _exact(index: Index, query: str, scope: str | None, limit: int) -> dict:
         elif row["status"] != "current":
             hidden[row["path"]] = row["status"]
         elif len(results) < limit:
-            results.append({"path": row["path"], "snippet": text[max(0, position - 80) : position + 200]})
+            results.append({
+                "path": row["path"], "snippet": text[max(0, position - 80) : position + 200],
+                **index.neighbours(row["path"]),
+            })
     excluded = [{"path": path, "reason": f"status: {status}"} for path, status in hidden.items()]
     excluded += [
         {"folder": f"{folder}/", "matches": count,

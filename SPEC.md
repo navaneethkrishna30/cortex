@@ -69,7 +69,8 @@ A weekly headless agent run with its own `dreamer` token, working only through t
 | B1 status allow-list | built |
 | B2 size limits | built |
 | B3 bare relation values | built |
-| B4–B9 below | to build |
+| B4 links in search results | built |
+| B5–B9 below | to build |
 
 ## Build tickets
 

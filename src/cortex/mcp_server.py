@@ -67,8 +67,9 @@ def build_mcp(store: Store, instructions: str) -> CortexMCP:
     async def search(query: str, scope: str | None = None, exact: bool = False) -> dict:
         """Find notes. Searches memory/ and entities/ and hides non-current notes. core/ is left out
         because it is already in your context, and .archive/ is never searched. Returns the 8 best
-        matches at most, dropping any far weaker than the top result.
-        `excluded` reports what was left out, with reasons and match counts for docs/ and logs/:
+        matches at most, dropping any far weaker than the top result. Each result carries `links`
+        (paths it links to) and `backlinks` (paths linking to it): read those to follow a relation
+        instead of searching again. `excluded` reports what was left out, with reasons and match counts for docs/ and logs/:
         if it shows matches there, tell the user. Use scope="all" to include docs/ and logs/ only
         when the user asks. exact=true does plain text matching."""
         return await _call(run_search, store.index, query, scope, exact)
