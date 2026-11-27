@@ -71,8 +71,9 @@ def build_mcp(store: Store, instructions: str) -> CortexMCP:
         (paths it links to) and `backlinks` (paths linking to it): read those to follow a relation
         instead of searching again. `excluded` reports what was left out, with reasons and match counts for docs/ and logs/:
         if it shows matches there, tell the user. Use scope="all" to include docs/ and logs/ only
-        when the user asks. exact=true does plain text matching."""
-        return await _call(run_search, store.index, query, scope, exact)
+        when the user asks. exact=true does plain text matching. `reranked` says whether a reranker
+        ordered the results; false means the plain fused order."""
+        return await _call(run_search, store.index, query, scope, exact, reranker=store.reranker)
 
     @mcp.tool(meta=ALWAYS_LOAD)
     async def read(path: str) -> dict:

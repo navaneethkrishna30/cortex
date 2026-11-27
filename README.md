@@ -83,7 +83,7 @@ Where things live is set by the environment:
 | `CORTEX_PUBLIC_URL` | `http://127.0.0.1:8765` |
 | `CORTEX_MCP_PORT` | `8765` |
 | `CORTEX_UI_PORT` | `8766` |
-| `VOYAGE_API_KEY` | Unset; needed only for Voyage embeddings |
+| `VOYAGE_API_KEY` | Unset; needed only for Voyage embeddings or reranking |
 
 How the vault behaves is set in `.cortex/config.toml` inside it:
 
@@ -95,11 +95,17 @@ push_minutes = 15           # how often to push to remotes
 memory_body_limit = 300     # longest memory line, in characters
 entity_body_limit = 1200    # longest card body, History left out
 allowed_folders = ["core", "memory", "entities", "docs", "logs"]
+rerank_provider = "none"    # or "voyage", which needs VOYAGE_API_KEY
+rerank_model = "rerank-3"
+rerank_timeout_s = 3        # slower than this, search keeps its own order
+rerank_candidates = 30      # how many top notes the reranker reorders
 
 [embedding]
 provider = "fastembed"      # or "voyage"
 model = "BAAI/bge-small-en-v1.5"
 ```
+
+Reranking is off by default. When it is on, agent searches send the query and one snippet per candidate note to Voyage, which reorders them. A timeout, an error or a missing key never fails a search: results keep their usual order and say `reranked: false`. The web UI's search and `exact=true` are never reranked.
 
 Run `cortex index --rebuild` after changing the embedding model. A new Cortex version that changes what the index holds rebuilds it on startup by itself.
 

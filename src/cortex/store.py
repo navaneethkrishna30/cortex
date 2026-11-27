@@ -67,6 +67,8 @@ class Store:
         self.git = git
         self.lock = threading.RLock()
         self.on_change = lambda: None
+        # Agent searches rerank through this when the vault turns it on; None keeps RRF order.
+        self.reranker = None
 
     # Reads
 
