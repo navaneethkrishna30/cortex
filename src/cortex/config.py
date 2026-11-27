@@ -31,7 +31,6 @@ class Settings:
     context_tokens: int = 2000
     duplicate_threshold: float = 0.96
     quiet_seconds: float = 5.0
-    push_minutes: int = 15
     # Characters of body (History left out). Memory stays a summary; detail belongs in its repo.
     memory_body_limit: int = 300
     entity_body_limit: int = 1200
@@ -74,7 +73,6 @@ def load_settings(vault: str | Path | None = None) -> Settings:
             "context_tokens",
             "duplicate_threshold",
             "quiet_seconds",
-            "push_minutes",
             "memory_body_limit",
             "entity_body_limit",
             "rerank_provider",

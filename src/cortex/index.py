@@ -107,29 +107,35 @@ class Index:
         )
         self.db.commit()
 
-    def rebuild(self) -> int:
+    def rebuild(self) -> list[str]:
         with self.lock:
             for table in DATA_TABLES:
                 self.db.execute(f"DELETE FROM {table}")
             self._create_vectors()
             return self.sync()
 
-    def sync(self) -> int:
-        """Bring the index in line with the folder; only changed files are re-embedded."""
+    def sync(self) -> list[str]:
+        """Bring the index in line with the folder; only changed files are re-embedded.
+
+        Returns the paths that changed or went, which is how outside edits are found.
+        """
         with self.lock:
             paths = self.vault.all_paths()
             known = {r["path"]: r["sha"] for r in self.db.execute("SELECT path, sha FROM files")}
-            changed = 0
+            changed = []
             for path in paths:
                 if known.get(path) != self.vault.hash(path):
                     self.index_file(path, relink=False)
-                    changed += 1
-            for path in set(known) - set(paths):
+                    changed.append(path)
+            for path in sorted(set(known) - set(paths)):
                 self.remove_file(path, relink=False)
-                changed += 1
+                changed.append(path)
             if changed:
                 self.relink()
             return changed
+
+    def is_empty(self) -> bool:
+        return self.db.execute("SELECT 1 FROM files LIMIT 1").fetchone() is None
 
     def index_file(self, path: str, relink: bool = True) -> None:
         # Archived notes open by path but are never searched.

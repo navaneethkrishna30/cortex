@@ -7,10 +7,10 @@ CARD = "---\nstatus: current\nlocated_in: [[server]]\nport: 8080\n---\n# App\nTh
 
 
 def last_author(store):
-    return store.git.run("log", "-1", "--format=%an").strip()
+    return store.changes.entries()[-1]["actor"]
 
 
-def test_write_commits_and_names_the_token(store):
+def test_write_logs_and_names_the_token(store):
     store.write("memory/likes-postgres.md", "Prefers Postgres.", actor="laptop")
     assert last_author(store) == "laptop"
     assert "status: current" in store.vault.read_text("memory/likes-postgres.md")
@@ -75,9 +75,9 @@ def test_update_edits_in_place_keeps_history_and_finds_stale_copies(store):
 
 def test_update_unchanged_is_a_no_op(store):
     made = store.write("entities/app.md", CARD, actor="a")
-    head = store.git.run("rev-parse", "HEAD")
-    assert store.update("entities/app.md", {"port": 8080}, "same", made["hash"], actor="a")["commit"] is None
-    assert store.git.run("rev-parse", "HEAD") == head
+    count = store.changes.count()
+    assert store.update("entities/app.md", {"port": 8080}, "same", made["hash"], actor="a")["hash"] == made["hash"]
+    assert store.changes.count() == count
 
 
 def test_moving_relation_flips_backlinks(store):
@@ -92,9 +92,9 @@ def test_moving_relation_flips_backlinks(store):
 
 def test_supersede_with_text_hides_old_from_search_and_context(store):
     store.write("memory/focus.md", "Current focus is gardening.", actor="a")
-    head_count = int(store.git.run("rev-list", "--count", "HEAD"))
+    count = store.changes.count()
     result = store.supersede("memory/focus.md", "Current focus is beekeeping.", "changed", actor="a")
-    assert int(store.git.run("rev-list", "--count", "HEAD")) == head_count + 1
+    assert store.changes.count() == count + 1
     old = store.read("memory/focus.md")
     assert "status: superseded" in old["content"] and "superseded by" in old["history"]
     found = search(store.index, "current focus", None)
@@ -113,7 +113,7 @@ def test_move_rewrites_links_and_archive_forgets(store):
     assert not (store.vault.root / "entities/app.md").exists()
     store.move("entities/service.md", ".archive/service.md", actor="a")
     assert not [r for r in search(store.index, "app", None)["results"] if "service" in r["path"]]
-    assert store.git.dirty_paths() == []
+    assert store.sync_outside_edits() == []
 
 
 def test_archive_stays_out_of_every_search_but_still_opens(store):
@@ -211,7 +211,7 @@ def test_secrets_refused_everywhere(store, secret):
         store.save_log("raw", secret, actor="a")
 
 
-def test_outside_edit_committed_as_human(store):
+def test_outside_edit_is_reindexed(store):
     (store.vault.root / "docs").mkdir()
     (store.vault.root / "docs/hand.md").write_text("# Hand\nEdited over SSH\n")
     assert store.sync_outside_edits() == ["docs/hand.md"]

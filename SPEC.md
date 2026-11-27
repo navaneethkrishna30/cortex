@@ -43,7 +43,7 @@ Not in the vault: status narratives, deploy trails, version lines, how a codebas
 
 ### 5. Dreaming (weekly upkeep)
 
-A weekly headless agent run with its own `dreamer` token, working only through the Cortex tools, skipped when git shows no change since the last run.
+A weekly headless agent run with its own `dreamer` token, working only through the Cortex tools, skipped when the change log has no entries since the last run.
 
 - **Applies on its own:** fixes broken or bare links, archives `logs/` older than 30 days, sets `expires` where a note states an end date, shortens cards over the limit by replacing repo detail with the repo link.
 - **Proposes only** (one task per run in the owner's task tracker): merges, supersedes, archiving live notes, moving content to a repo.
@@ -51,15 +51,16 @@ A weekly headless agent run with its own `dreamer` token, working only through t
 
 ### 6. Packaging and state
 
-- Python. Installed from a git tag into `/opt/cortex`; all state in `/var/lib/cortex`: vault (git), `auth.sqlite`, `.cortex/index.sqlite`, model cache.
-- The index rebuilds itself when its schema version changes. Backup copies the vault repo and `auth.sqlite`; index and model cache are rebuildable and excluded.
+- Python. Installed from a git tag into `/opt/cortex`; all state in `/var/lib/cortex`: vault (plain files, not a git repo), `auth.sqlite`, `.cortex/index.sqlite`, model cache.
+- Every change appends one line to `<vault>/.cortex/changes.jsonl`: `{"at": "<UTC, YYYY-MM-DDTHH:MM:SSZ>", "actor": "<token name or human>", "action": "write|update|supersede|move|save_log|edit", "paths": [...]}`; `edit` is an outside edit the watcher saw, by `human`. The in-note History section is the only per-note history; there are no old versions. A leftover `.git` in the vault is ignored.
+- The index rebuilds itself when its schema version changes. Backup (the owner's job) copies the vault dir and `auth.sqlite`; index and model cache are rebuildable and excluded.
 - Deployed and maintained by the `cortex` playbook of the server's infra repo (owner builds it).
 
 ## Built vs to build
 
 | Piece | State |
 |---|---|
-| Vault, git history, typed relations, backlinks, supersede/archive, duplicate refusal | built (before vnext) |
+| Vault, typed relations, backlinks, supersede/archive, duplicate refusal | built (before vnext) |
 | BM25 + vector RRF search, `exact`, docs/logs exclusion | built |
 | `cortex eval <file>` (hit@k over a question TSV) | built, 10 sample questions |
 | `anthropic/alwaysLoad` on every tool | built, deployed 2026-11-27 |
@@ -74,6 +75,7 @@ A weekly headless agent run with its own `dreamer` token, working only through t
 | B6 Voyage rerank | built, off by default |
 | B7 eval harness | built |
 | B8–B9 below | to build |
+| B10 vault without git; change log | built |
 
 ## Build tickets
 
@@ -87,6 +89,7 @@ Each ticket is sized for one agent session. Rules for every ticket: tests first 
 - **B6 Voyage rerank.** `rerank.py`: Voyage rerank over the top 30 fused candidates (one snippet per note), config `rerank_provider` (`none` default | `voyage`), `rerank_model`, `rerank_timeout_s` (default 3), key from `VOYAGE_API_KEY`. Timeout or error → RRF order and a `reranked: false` flag in the response. Unit tests with a fake HTTP client; no network in tests.
 - **B7 Eval harness.** Extend `cortex eval`: report hit@1, hit@8, MRR, p50/p95/p99 latency, per-question misses; `--rerank on|off` to compare; accept multiple expected paths per question (`path1|path2`). Keep the TSV format backward compatible. Tests on the sample vault. The owner supplies the real 50 questions.
 - **B8 Capture and commands (client side).** In `clients/claude-code/`: the Stop hook script (once per session after turn 10, marker per session id, prints the capture instruction as a blocking reason), `/remember` and `/forget` skills, the first-prompt recall hook (copy of the owner's), and an install note. Mirror skills under `clients/opencode/`. Tests for the hook's once-per-session logic.
-- **B9 Dreaming.** `clients/dreamer/`: the prompt (§5 rules, caps), a wrapper script (skip if no git change since last run; run a headless agent with only Cortex tools; after the run, revert any `dreamer` commit that removed body text; turn the agent's JSON proposals into one tracker task), and a systemd timer + service template. Server side: nothing new beyond a `dreamer` token. Tests for the skip logic, the revert check and the proposal formatting.
+- **B9 Dreaming.** `clients/dreamer/`: the prompt (§5 rules, caps), a wrapper script (skip when the change log has no entries since the last run; snapshot the vault before the run; run a headless agent with only Cortex tools; after the run, restore from the pre-run snapshot any file a `dreamer` change-log entry touched whose body lost text; turn the agent's JSON proposals into one tracker task), and a systemd timer + service template. Server side: nothing new beyond a `dreamer` token. Tests for the skip logic, the revert check and the proposal formatting.
+- **B10 Vault without git.** The vault stops being a git repo: no `git init`, commits or pushes; files are written atomically (temp file + `os.replace`) under the store lock. `changelog.py` appends one line per change to `.cortex/changes.jsonl` (format in §6) and reads it back with `entries(since)`. The watcher logs outside edits as `human` `edit` and reindexes; an empty index logs nothing, having no baseline. The UI's per-note history lists that note's change-log entries (time, actor, action); no old versions. `cortex doctor` shows vault size and change-log entries. An existing `.git` is left on disk and ignored. Tests for each action's entry, outside edits, no `.git` on startup, an existing `.git` ignored.
 
 Owner steps (not for agents): the 50 eval questions with expected notes; the infra playbook (install from tag, `/etc/cortex.env` with `VOYAGE_API_KEY`, state dir, backup, timers); tagging releases.

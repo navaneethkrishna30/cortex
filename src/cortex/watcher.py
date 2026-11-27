@@ -1,4 +1,4 @@
-"""Background upkeep: commit outside edits after a quiet period, push on a timer."""
+"""Background upkeep: after the folder goes quiet, reindex outside edits and log them."""
 
 from __future__ import annotations
 
@@ -22,7 +22,8 @@ class _Handler(FileSystemEventHandler):
         relative = str(event.src_path).removeprefix(self.root).lstrip("/")
         if event.event_type in ("opened", "closed_no_write"):
             return
-        if not relative.startswith((".git", ".cortex")):
+        # A .git left over from older versions is ignored, like Cortex's own state.
+        if relative.split("/")[0] not in (".git", ".cortex"):
             self.changed.set()
 
 
@@ -39,7 +40,6 @@ class Background:
         self.observer.schedule(_Handler(self.changed, root), root, recursive=True)
         self.observer.start()
         threading.Thread(target=self._watch_loop, daemon=True, name="cortex-watch").start()
-        threading.Thread(target=self._push_loop, daemon=True, name="cortex-push").start()
 
     def stop(self) -> None:
         self.stop_event.set()
@@ -56,13 +56,8 @@ class Background:
             if self.stop_event.is_set():
                 return
             try:
-                dirty = self.store.sync_outside_edits()
-                if dirty:
-                    log.info("committed outside edits: %s", dirty)
+                changed = self.store.sync_outside_edits()
+                if changed:
+                    log.info("logged outside edits: %s", changed)
             except Exception:
                 log.exception("could not sync outside edits")
-
-    def _push_loop(self) -> None:
-        while not self.stop_event.wait(self.settings.push_minutes * 60):
-            for failure in self.store.git.push():
-                log.warning("push failed: %s", failure)

@@ -16,7 +16,7 @@ SAMPLE = Path(__file__).parent / "eval"
 
 @pytest.fixture
 def sample_vault(tmp_path):
-    """A copy, since opening a vault writes its index and git repo in place."""
+    """A copy, since opening a vault writes its index and change log in place."""
     vault = tmp_path / "vault"
     shutil.copytree(SAMPLE / "vault", vault, ignore=shutil.ignore_patterns(".cortex"))
     (vault / ".cortex").mkdir()

@@ -169,7 +169,7 @@ def test_full_login_then_tools_then_refresh_rotation(world):
     assert tokens["expires_in"] == 3600
 
     rpc(public, tokens["access_token"], "tools/call", {"name": "write", "arguments": {"path": "memory/oauth-works.md", "content": "OAuth works."}})
-    assert store.git.run("log", "-1", "--format=%an").strip() == "laptop"
+    assert store.changes.entries()[-1]["actor"] == "laptop"
 
     rotated = public.post("/oauth/token", data={"grant_type": "refresh_token", "refresh_token": tokens["refresh_token"]})
     assert rotated.status_code == 200
@@ -256,16 +256,29 @@ def test_redirect_allowlist(world):
     assert public.post("/oauth/register", json={"redirect_uris": ["https://evil.example/cb"]}).status_code == 400
 
 
-def test_ui_core_edit_needs_confirmation_and_commits_as_human(world):
+def test_ui_core_edit_needs_confirmation_and_logs_as_human(world):
     auth, _, ui, store = world
     enrol(auth, ui)
     current = store.vault.hash("core/rules.md")
     data = {"path": "core/rules.md", "content": "# Rules\nEdited.\n", "hash": current}
     assert ui.post("/ui/files", data=data).status_code == 409
     assert ui.post("/ui/files", data={**data, "confirm_core": "yes"}).status_code == 200
-    assert store.git.run("log", "-1", "--format=%an").strip() == "human"
+    assert store.changes.entries()[-1] | {"at": None} == {"at": None, "actor": "human", "action": "write", "paths": ["core/rules.md"]}
     stale = ui.post("/ui/files", data={**data, "confirm_core": "yes"})
     assert stale.status_code == 409 and "stale" in stale.text.lower()
+
+
+def test_ui_history_lists_the_change_log_for_that_note(world):
+    auth, _, ui, store = world
+    enrol(auth, ui)
+    made = store.write("entities/app.md", "---\nstatus: current\nport: 1\n---\n# App\nThe app.\n", actor="laptop")
+    store.update("entities/app.md", {"port": 2}, "moved", made["hash"], actor="phone")
+    store.write("docs/other.md", "# Other\nUnrelated.\n", actor="tablet")
+    page = ui.get("/ui/files/history?path=entities/app.md")
+    assert page.status_code == 200
+    assert "laptop" in page.text and "phone" in page.text and "update" in page.text
+    assert "tablet" not in page.text
+    assert "rev=" not in page.text
 
 
 def test_ui_cross_origin_post_refused(world):

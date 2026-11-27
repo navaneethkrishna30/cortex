@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import secrets
 import time
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
 
@@ -20,7 +21,7 @@ from starlette.staticfiles import StaticFiles
 
 from .auth import AuthError, AuthStore
 from .config import Settings
-from .gitrepo import HUMAN
+from .changelog import HUMAN
 from .note_view import render_note
 from .search import search
 from .store import Store
@@ -80,6 +81,11 @@ def _ago(moment: float) -> str:
         if seconds >= size:
             return f"{seconds // size}{unit} ago"
     return "just now"
+
+
+def _epoch(stamp: str) -> float:
+    """Change-log times are ISO strings; the page's time filters take seconds."""
+    return datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp()
 
 
 templates.filters["ago"] = _ago
@@ -319,7 +325,7 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
         vault = store.vault
         paths = vault.all_paths()
         base = {"path": None, "content": "", "hash": "", "error": None, "message": None, "active": "files", "new": False,
-                "q": None, "results": [], "history": None, "version": None, "new_folders": NEW_NOTE_FOLDERS,
+                "q": None, "results": [], "history": None, "new_folders": NEW_NOTE_FOLDERS,
                 "new_folder": None, "new_name": "", "folder": None}
         context = {**base, **context}
         path = context["path"]
@@ -351,7 +357,7 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
                 if clean.startswith("core/") and form.get("confirm_core") != "yes":
                     raise VaultError("core/ loads into every session. Confirm this change before saving.")
                 result = store.write(clean, content, expected, actor=HUMAN, human=True)
-                return files_page(path=clean, content=vault.read_text(clean), hash=result["hash"], message="Saved and committed.")
+                return files_page(path=clean, content=vault.read_text(clean), hash=result["hash"], message="Saved.")
             except VaultError as error:
                 is_new = not expected
                 return files_page(409, path=None if is_new else path, content=content, hash=expected or "", error=_sentence(error),
@@ -373,13 +379,13 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
 
     async def note_history(request: Request) -> Response:
         vault = store.vault
-        path, rev = request.query_params.get("path", ""), request.query_params.get("rev", "")
+        path = request.query_params.get("path", "")
         try:
             clean = vault.clean(path, must_exist=True, archive_ok=True)
         except VaultError:
             return files_page(404, error=f"There's no note at {path}. It may have moved or been archived.")
-        version = store.git.show(rev, clean) if re.fullmatch(r"[0-9a-f]{40}", rev) else None
-        return files_page(path=clean, history=store.git.history(clean), version=version)
+        history = [{**entry, "at": _epoch(entry["at"])} for entry in store.changes.for_path(clean)]
+        return files_page(path=clean, history=history)
 
     async def move_note(request: Request) -> Response:
         form = await request.form()

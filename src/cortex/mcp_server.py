@@ -101,22 +101,22 @@ def build_mcp(store: Store, instructions: str) -> CortexMCP:
 
     @mcp.tool(meta=ALWAYS_LOAD)
     async def update(path: str, fields: dict, reason: str, expected_hash: str) -> dict:
-        """Change frontmatter fields of a note you just read: edits in place, appends History and
-        commits. Returns stale_copies, other places still showing the old value; fix or flag them.
+        """Change frontmatter fields of a note you just read: edits in place and appends History.
+        Returns stale_copies, other places still showing the old value; fix or flag them.
         Use this when a fact changes, status included; never create a second note on the same
         subject. To replace a note with another, use supersede."""
         return await _call(store.update, path, fields, reason, expected_hash, actor=_actor())
 
     @mcp.tool(meta=ALWAYS_LOAD)
     async def supersede(old: str, new: str, reason: str) -> dict:
-        """Retire a note or memory line in favour of its replacement, in one commit. `new` is the
+        """Retire a note or memory line in favour of its replacement, in one change. `new` is the
         path of an existing note (ending .md), or the replacement's text to create beside the old
         one. The old note stops surfacing but stays in History. Only between notes on the same fact."""
         return await _call(store.supersede, old, new, reason, actor=_actor())
 
     @mcp.tool(meta=ALWAYS_LOAD)
     async def move(path: str, to: str) -> dict:
-        """Rename a note and rewrite links to it, in one commit. Never delete: to forget, move the
+        """Rename a note and rewrite links to it, in one change. Never delete: to forget, move the
         note to .archive/. Returns linked_from, the live notes that now link to the new path; after
         archiving, fix those links or flag them to the user."""
         return await _call(store.move, path, to, actor=_actor())

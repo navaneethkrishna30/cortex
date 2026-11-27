@@ -1,4 +1,4 @@
-"""Every change to the vault goes through here: one queue, index first, then one commit."""
+"""Every change to the vault goes through here: one queue, files then index, then one change-log line."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import re
 import threading
 from datetime import date, datetime
 
-from .gitrepo import HUMAN, Git
+from .changelog import HUMAN, ChangeLog
 from .index import Index
 from .notes import (
     LINK,
@@ -61,10 +61,10 @@ def build_context(vault: Vault) -> str:
 
 
 class Store:
-    def __init__(self, vault: Vault, index: Index, git: Git):
+    def __init__(self, vault: Vault, index: Index):
         self.vault = vault
         self.index = index
-        self.git = git
+        self.changes = ChangeLog(vault.settings.state_dir / "changes.jsonl")
         self.lock = threading.RLock()
         self.on_change = lambda: None
         # Agent searches rerank through this when the vault turns it on; None keeps RRF order.
@@ -112,8 +112,7 @@ class Store:
                 self._check_hash(clean, expected_hash)
             self._check_shape(clean, content, human)
             self._check_limits(clean, content, self.vault.read_text(clean) if exists else None)
-            verb = "edit" if exists else "write"
-            return self._save({clean: content}, f"{verb}: {clean}", actor, clean)
+            return self._save({clean: content}, "write", actor, clean)
 
     def update(self, path: str, fields: dict, reason: str, expected_hash: str, *, actor: str) -> dict:
         clean = self.vault.clean(path, must_exist=True)
@@ -129,14 +128,14 @@ class Store:
             current = parse(text).fields
             changed = {k: v for k, v in fields.items() if _plain(current.get(k)) != _plain(v)}
             if not changed:
-                return {"path": clean, "hash": sha256(text), "commit": None, "stale_copies": []}
+                return {"path": clean, "hash": sha256(text), "stale_copies": []}
             new_text = set_fields(text, changed)
             for key, value in changed.items():
                 old = _plain(current.get(key)) or "(unset)"
                 new_text = add_history(new_text, f"{date.today()}: {key} {old} -> {_plain(value)} ({reason.strip()})")
             self._check_relations(new_text)
             self._check_limits(clean, new_text, text)
-            result = self._save({clean: new_text}, f"update: {clean} ({', '.join(changed)})", actor, clean)
+            result = self._save({clean: new_text}, "update", actor, clean)
             result["stale_copies"] = self._stale_copies(clean, [current.get(k) for k in changed])
             return result
 
@@ -171,7 +170,7 @@ class Store:
             changes[new_path] = set_fields(new_text, {"replaces": old_link})
             for path, text in changes.items():
                 self._check_limits(path, text, before[path])
-            return self._save(changes, f"supersede: {old_path} -> {new_path}", actor, new_path)
+            return self._save(changes, "supersede", actor, new_path)
 
     def move(self, path: str, to: str, *, actor: str) -> dict:
         source = self.vault.clean(path, must_exist=True)
@@ -193,7 +192,7 @@ class Store:
             (self.vault.root / source).unlink()
             self.index.remove_file(source, relink=False)
             linked_from = sorted(path for path in changes if path != target)
-            result = self._save(changes, f"move: {source} -> {target}", actor, target, removed=[source])
+            result = self._save(changes, "move", actor, target, removed=[source])
             return {**result, "linked_from": linked_from}
 
     def save_log(self, kind: str, text: str, day: str | None = None, *, actor: str) -> dict:
@@ -210,30 +209,42 @@ class Store:
             full = self.vault.root / path
             existing = full.read_text() if full.exists() else f"# {kind} {day}\n"
             entry = f"{existing.rstrip()}\n\n## {heading} ({actor})\n{text.strip()}\n"
-            return self._save({path: entry}, f"log: {path}", actor, path)
+            return self._save({path: entry}, "save_log", actor, path)
 
     def sync_outside_edits(self) -> list[str]:
-        """Pick up edits made outside Cortex: reindex them and commit them as human."""
+        """Pick up edits made outside Cortex: reindex them and log them as a human edit.
+
+        The index is the baseline: a file whose hash differs from its indexed one changed outside.
+        An empty index (first start, or index.sqlite lost) has no baseline, so nothing is logged.
+        """
         with self.lock:
-            prefixes = tuple(f"{f}/" for f in self.vault.settings.allowed_folders)
-            dirty = [p for p in self.git.dirty_paths() if p.startswith(prefixes)]
-            self.index.sync()
-            if dirty:
-                self.git.commit("edit: outside change", HUMAN, dirty)
+            fresh = self.index.is_empty()
+            changed = self.index.sync()
+            if changed and not fresh:
+                self.changes.append(HUMAN, "edit", changed)
+            if changed:
                 self.on_change()
-            return dirty
+            return changed
 
     # Internals
 
-    def _save(self, changes: dict[str, str], message: str, actor: str, primary: str, removed: list[str] | None = None) -> dict:
+    def _save(self, changes: dict[str, str], action: str, actor: str, primary: str, removed: list[str] | None = None) -> dict:
+        # A save that changes nothing leaves no trace, so "no entries" really means no change.
+        changes = {p: t for p, t in changes.items() if not self._same_on_disk(p, t)}
+        removed = removed or []
         for path, text in changes.items():
             self.vault.write_text(path, text)
         for path in changes:
             self.index.index_file(path, relink=False)
-        self.index.relink()
-        commit = self.git.commit(message, actor, list(changes) + (removed or []))
-        self.on_change()
-        return {"path": primary, "hash": self.vault.hash(primary), "commit": commit}
+        if changes or removed:
+            self.index.relink()
+            self.changes.append(actor, action, removed + list(changes))
+            self.on_change()
+        return {"path": primary, "hash": self.vault.hash(primary)}
+
+    def _same_on_disk(self, path: str, text: str) -> bool:
+        full = self.vault.root / path
+        return full.is_file() and full.read_text(encoding="utf-8") == text
 
     def _check_writable(self, path: str, human: bool = False) -> None:
         folder = path.split("/")[0]
