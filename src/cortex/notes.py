@@ -88,20 +88,31 @@ def history_span(body: str) -> tuple[int | None, int | None]:
     return match.start(), following.start() if following else len(body)
 
 
-def field_links(value) -> list[str]:
-    """Link targets in a frontmatter value. YAML reads `[[x]]` as a nested list, so handle both."""
+def field_links(value, bare: bool = False) -> list[str]:
+    """Link targets in a frontmatter value. YAML reads `[[x]]` as a nested list, so handle both.
+
+    With `bare`, a plain string counts as a target too: agents often write `depends_on: x`.
+    """
     if isinstance(value, str):
-        return LINK.findall(value)
+        found = LINK.findall(value)
+        return [value.strip()] if bare and not found and value.strip() else found
     if isinstance(value, list):
         if len(value) == 1 and isinstance(value[0], list) and len(value[0]) == 1:
             return [str(value[0][0])]
-        return [target for item in value for target in field_links(item)]
+        return [target for item in value for target in field_links(item, bare)]
     return []
 
 
-def relation_edges(note: Note) -> list[tuple[str, str]]:
-    """(relation, target) for each link held in a frontmatter field."""
-    return [(key, target) for key, value in note.fields.items() for target in field_links(value)]
+def relation_edges(note: Note, relations: set[str] = frozenset()) -> list[tuple[str, str]]:
+    """(relation, target) for each link held in a frontmatter field.
+
+    Bare values count only under a known relation type, so `port: 8080` never becomes an edge.
+    """
+    return [
+        (key, target)
+        for key, value in note.fields.items()
+        for target in field_links(value, bare=key in relations)
+    ]
 
 
 def body_links(note: Note) -> list[str]:

@@ -159,10 +159,11 @@ class Index:
         """Recompute every edge. A vault is small, and targets move when any note appears or goes."""
         with self.lock:
             paths = self.vault.all_paths()
+            relations = self.vault.relation_types()
             self.db.execute("DELETE FROM edges")
             for path in paths:
                 note = self.vault.load(path)
-                edges = relation_edges(note) + [("links_to", target) for target in body_links(note)]
+                edges = relation_edges(note, relations) + [("links_to", target) for target in body_links(note)]
                 for relation, target in dict.fromkeys(edges):
                     self.db.execute(
                         "INSERT INTO edges VALUES(?,?,?,?)",

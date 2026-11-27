@@ -68,7 +68,8 @@ A weekly headless agent run with its own `dreamer` token, working only through t
 | Vault cleanup to §1 | in progress |
 | B1 status allow-list | built |
 | B2 size limits | built |
-| B3–B9 below | to build |
+| B3 bare relation values | built |
+| B4–B9 below | to build |
 
 ## Build tickets
 
