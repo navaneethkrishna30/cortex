@@ -65,7 +65,7 @@ A weekly headless agent run with its own `dreamer` token, working only through t
 | `cortex eval <file>` (hit@k over a question TSV) | built, 10 sample questions |
 | `anthropic/alwaysLoad` on every tool | built, deployed 2026-11-27 |
 | `expires` (query-time, memory index, duplicate check) | built, deployed 2026-11-27 |
-| First-prompt recall hook (Claude Code) | built, on the owner's laptop (client side, not in this repo) |
+| First-prompt recall hook (Claude Code) | built, on the owner's laptop; copy in `clients/` (B8) |
 | Vault cleanup to §1 | in progress |
 | B1 status allow-list | built |
 | B2 size limits | built |
@@ -74,7 +74,8 @@ A weekly headless agent run with its own `dreamer` token, working only through t
 | B5 index schema version | built |
 | B6 Voyage rerank | built, off by default |
 | B7 eval harness | built |
-| B8–B9 below | to build |
+| B8 capture hook, recall hook, `/remember` `/forget` (`clients/`) | built, not installed |
+| B9 dreaming (`clients/dreamer/`) | built, not installed |
 | B10 vault without git; change log | built |
 
 ## Build tickets

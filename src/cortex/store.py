@@ -174,8 +174,10 @@ class Store:
 
     def move(self, path: str, to: str, *, actor: str) -> dict:
         source = self.vault.clean(path, must_exist=True)
-        self._check_writable(source)
         target = self.vault.clean(to, archive_ok=True)
+        # Logs are append-only, but old ones must leave logs/ for .archive/ (dreaming, SPEC §5).
+        if not (source.startswith("logs/") and target.startswith(ARCHIVE + "/")):
+            self._check_writable(source)
         if not target.startswith(ARCHIVE + "/"):
             self._check_writable(target)
         with self.lock:

@@ -192,6 +192,18 @@ def test_move_reports_live_notes_still_linking(store):
     assert "[[.archive/docs/guide]]" in store.vault.read_text("entities/app.md")
 
 
+def test_logs_can_be_archived_but_not_moved_elsewhere(store):
+    # Dreaming archives logs/ older than 30 days (SPEC §5); logs stay append-only otherwise.
+    store.save_log("daily", "old note", "2026-01-15", actor="a")
+    store.write("docs/notes.md", "# Notes\nSee [[logs/daily/2026-01-15]].\n", actor="a")
+    with pytest.raises(VaultError, match="append-only"):
+        store.move("logs/daily/2026-01-15.md", "docs/2026-01-15.md", actor="dreamer")
+    store.move("logs/daily/2026-01-15.md", ".archive/logs/daily/2026-01-15.md", actor="dreamer")
+    assert "old note" in store.vault.read_text(".archive/logs/daily/2026-01-15.md")
+    assert not (store.vault.root / "logs/daily/2026-01-15.md").exists()
+    assert last_author(store) == "dreamer"
+
+
 def test_save_log_appends_and_search_reports_it(store):
     store.save_log("daily", "talked about zebras", actor="a")
     store.save_log("daily", "more zebras", actor="a")

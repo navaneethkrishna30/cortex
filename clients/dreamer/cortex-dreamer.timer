@@ -1,0 +1,12 @@
+# Template: run cortex-dreamer.service once a week (clients/dreamer/README.md).
+[Unit]
+Description=Weekly Cortex dreaming
+
+[Timer]
+OnCalendar=Sun *-*-* 03:00:00
+# A run missed while the machine was off happens at the next boot.
+Persistent=true
+RandomizedDelaySec=2h
+
+[Install]
+WantedBy=timers.target
