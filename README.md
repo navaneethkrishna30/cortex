@@ -92,6 +92,8 @@ context_tokens = 2000       # budget for what agents receive at session start
 duplicate_threshold = 0.96  # how similar a new note must be to count as a duplicate
 quiet_seconds = 5.0         # wait after outside edits before committing them
 push_minutes = 15           # how often to push to remotes
+memory_body_limit = 300     # longest memory line, in characters
+entity_body_limit = 1200    # longest card body, History left out
 allowed_folders = ["core", "memory", "entities", "docs", "logs"]
 
 [embedding]

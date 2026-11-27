@@ -272,6 +272,18 @@ class Store:
                 f"status {status!r} is not allowed; use one of {', '.join(STATUSES)}. "
                 "Put versions or phases in a field of their own, such as phase:"
             )
+        limit = self._body_limit(path)
+        size = len(new.body_without_history.strip())
+        if limit is not None and size > limit and (old is None or size > len(old.body_without_history.strip())):
+            raise VaultError(
+                f"{path} has {size} characters of body; {path.split('/')[0]}/ allows {limit} characters. "
+                "move detail to the repo; link it"
+            )
+
+    def _body_limit(self, path: str) -> int | None:
+        """Only memory lines and cards have a size limit; docs/, core/ and logs/ hold longer text."""
+        settings = self.vault.settings
+        return {"memory": settings.memory_body_limit, "entities": settings.entity_body_limit}.get(path.split("/")[0])
 
     def _check_relations(self, content: str) -> None:
         allowed = self.vault.relation_types()
