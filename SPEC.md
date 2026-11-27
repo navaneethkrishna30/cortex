@@ -30,7 +30,7 @@ No new memory kinds (observation, page, mental model): the folders above are the
 
 - Channels stay BM25 (FTS5) + vector, fused by RRF, plus `exact=true`. Measured on the real vault: 2-hop graph expansion returns 40–70% of the vault, semantic links at cosine 0.7 are ~70% noise, same-day links mean little. None are added.
 - Each result carries the paths of the notes it links to and is linked from (1 hop, < 1 ms), so the agent can follow a relation without a second search.
-- A reranker is added only if it beats the current ranking on the eval set and keeps a whole search under p50 2 s / p99 4 s on the server.
+- A reranker is added only if it beats the current ranking on the eval set and keeps a whole search under p50 2 s / p99 4 s on the server. Candidate: local fastembed `jinaai/jina-reranker-v1-turbo-en` (Apache-2.0, ~0.4 GB RSS), loaded at startup, reranking the top 30; measured ~0.5–0.9 s on a throttled laptop, to be re-timed on the server. Fallbacks: `jina-reranker-v1-tiny-en`, `ms-marco-MiniLM-L-6-v2`. Hosted rerankers are out: network latency alone is 0.4–1.3 s and note text would leave the server.
 - No query date parsing or recency boost until the eval set shows misses they would fix.
 
 ## 4. Getting memory in and out of sessions
