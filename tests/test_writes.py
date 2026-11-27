@@ -231,12 +231,16 @@ def test_outside_edit_is_reindexed(store):
     assert search(store.index, "SSH", "all")["results"]
 
 
-def test_index_mismatch_refuses_until_rebuild(store):
+def test_a_new_embedding_model_re_embeds_instead_of_refusing(store):
     from cortex.embed import HashEmbedder
-    from cortex.index import Index, IndexMismatch
+    from cortex.index import Index
 
-    with pytest.raises(IndexMismatch):
-        Index(store.vault, HashEmbedder(dimensions=64))
+    store.write("memory/ssh.md", "Veronica takes SSH on the tailnet only.\n", actor="a")
+    index = Index(store.vault, HashEmbedder(dimensions=64))
+    assert index.pending_count() == index.db.execute("SELECT count(DISTINCT path) FROM chunks").fetchone()[0]
+    assert index.backfill() >= 1
+    assert index.pending_count() == 0
+    assert search(index, "tailnet SSH")["results"][0]["path"] == "memory/ssh.md"
 
 
 def test_similar_cards_for_different_things_are_allowed(store):

@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import logging
+
 import sqlite_vec
 
 from .index import Index, fts_query
 from .rerank import Reranker, rerank
+
+log = logging.getLogger("cortex.search")
 
 DEFAULT_FOLDERS = ("memory", "entities")
 # Already in every session's context, so a search result would only repeat it.
@@ -28,8 +32,18 @@ def _keyword_ranking(index: Index, query: str) -> list[int]:
     return [row["rowid"] for row in rows]
 
 
-def _vector_ranking(index: Index, query: str) -> list[int]:
-    vector = index.embedder.embed([query])[0]
+def _embed(index: Index, text: str, kind: str) -> list[float] | None:
+    """The text's vector, or None when the embedder is down; callers then do without vectors."""
+    try:
+        return index.embedder.embed([text], kind)[0]
+    except Exception as error:  # noqa: BLE001 - an embedder problem must never fail a search
+        log.warning("embedding a %s failed, searching by keyword only: %s", kind, error)
+        return None
+
+
+def _vector_ranking(index: Index, vector: list[float] | None) -> list[int]:
+    if vector is None:
+        return []
     rows = index.db.execute(
         "SELECT rowid FROM chunks_vec WHERE embedding MATCH ? AND k = ? ORDER BY distance",
         (sqlite_vec.serialize_float32(vector), CANDIDATES),
@@ -68,19 +82,25 @@ def search(
         with index.lock:
             return {**_exact(index, query, scope, limit), "reranked": False}
     wanted = max(limit, reranker.candidates) if reranker else limit
+    # Outside the lock, like the reranker: a slow embedder must not hold up writes and other searches.
+    vector = _embed(index, query, "query")
     with index.lock:
-        results, excluded = _fused(index, query, scope, wanted)
+        results, excluded = _fused(index, query, vector, scope, wanted)
     reranked = False
-    # Outside the lock: a slow reranker must not hold up writes and other searches.
     if reranker and results:
         results, reranked = rerank(reranker, query, results)
-    return {"results": results[:limit], "excluded": excluded, "reranked": reranked}
+    reply = {"results": results[:limit], "excluded": excluded, "reranked": reranked}
+    if vector is None:
+        reply["semantic"] = False
+    return reply
 
 
-def _fused(index: Index, query: str, scope: str | None, limit: int) -> tuple[list[dict], list[dict]]:
+def _fused(
+    index: Index, query: str, vector: list[float] | None, scope: str | None, limit: int
+) -> tuple[list[dict], list[dict]]:
     """The best `limit` notes by RRF, one (best) chunk each, plus what was left out."""
     scores: dict[int, float] = {}
-    for ranking in (_keyword_ranking(index, query), _vector_ranking(index, query)):
+    for ranking in (_keyword_ranking(index, query), _vector_ranking(index, vector)):
         for position, rowid in enumerate(ranking):
             scores[rowid] = scores.get(rowid, 0.0) + 1.0 / (RRF_K + position + 1)
     results: dict[str, dict] = {}
@@ -141,18 +161,22 @@ def _exact(index: Index, query: str, scope: str | None, limit: int) -> dict:
 
 def nearest_live_note(index: Index, text: str, folder: str, threshold: float) -> str | None:
     """The current note in `folder` closest in meaning to `text`, if it is close enough to be the same subject."""
-    vector = index.embedder.embed([text])[0]
-    rows = index.db.execute(
-        "SELECT rowid, distance FROM chunks_vec WHERE embedding MATCH ? AND k = 20 ORDER BY distance",
-        (sqlite_vec.serialize_float32(vector),),
-    ).fetchall()
-    for row in rows:
-        if 1.0 - row["distance"] < threshold:
-            return None
-        match = index.db.execute(
-            "SELECT f.path FROM chunks c JOIN files f USING(path) "
-            "WHERE c.id=? AND f.folder=? AND f.status='current'", (row["rowid"], folder)
-        ).fetchone()
-        if match:
-            return match["path"]
+    # With the embedder down the duplicate check is skipped; the write is not refused for it.
+    vector = _embed(index, text, "document")
+    if vector is None:
+        return None
+    with index.lock:
+        rows = index.db.execute(
+            "SELECT rowid, distance FROM chunks_vec WHERE embedding MATCH ? AND k = 20 ORDER BY distance",
+            (sqlite_vec.serialize_float32(vector),),
+        ).fetchall()
+        for row in rows:
+            if 1.0 - row["distance"] < threshold:
+                return None
+            match = index.db.execute(
+                "SELECT f.path FROM chunks c JOIN files f USING(path) "
+                "WHERE c.id=? AND f.folder=? AND f.status='current'", (row["rowid"], folder)
+            ).fetchone()
+            if match:
+                return match["path"]
     return None

@@ -1,10 +1,16 @@
-"""Pluggable embedders. Anything with `name`, `dimensions` and `embed(texts)` works."""
+"""Pluggable embedders. Anything with `name`, `dimensions` and `embed(texts, kind)` works.
+
+`kind` is "document" for note chunks and "query" for search text; models that tell the two apart
+(Voyage) embed them differently, the others ignore it. An embedder may raise: the index keeps the
+note searchable by keyword and fills its vectors in later.
+"""
 
 from __future__ import annotations
 
 import hashlib
 import math
 import os
+import time
 from typing import Protocol
 
 import httpx
@@ -16,11 +22,11 @@ class Embedder(Protocol):
     name: str
     dimensions: int
 
-    def embed(self, texts: list[str]) -> list[list[float]]: ...
+    def embed(self, texts: list[str], kind: str = "document") -> list[list[float]]: ...
 
 
 class FastEmbedder:
-    """Local CPU model; no API key. The model downloads on first use."""
+    """Local CPU model; no API key. Needs the `local` extra; the model downloads on first use."""
 
     def __init__(self, model: str):
         from fastembed import TextEmbedding
@@ -29,26 +35,50 @@ class FastEmbedder:
         self._model = TextEmbedding(model_name=model)
         self.dimensions = len(self.embed(["dimension probe"])[0])
 
-    def embed(self, texts: list[str]) -> list[list[float]]:
+    def embed(self, texts: list[str], kind: str = "document") -> list[list[float]]:
         return [vector.tolist() for vector in self._model.embed(texts)]
 
 
-class VoyageEmbedder:
-    def __init__(self, model: str):
-        self.name = f"voyage:{model}"
-        self._model = model
-        self._key = os.environ["VOYAGE_API_KEY"]
-        self.dimensions = len(self.embed(["dimension probe"])[0])
+VOYAGE_EMBED_URL = "https://api.voyageai.com/v1/embeddings"
 
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        response = httpx.post(
-            "https://api.voyageai.com/v1/embeddings",
-            headers={"Authorization": f"Bearer {self._key}"},
-            json={"model": self._model, "input": texts},
-            timeout=60,
-        )
-        response.raise_for_status()
-        return [item["embedding"] for item in response.json()["data"]]
+
+class VoyageEmbedder:
+    """Voyage's API. Dimensions come from config, so starting up needs no network."""
+
+    BATCH = 128
+
+    def __init__(self, model: str, dimensions: int, client: httpx.Client | None = None,
+                 query_timeout: float = 5.0, document_timeout: float = 30.0):
+        self.name = f"voyage:{model}"
+        self.dimensions = dimensions
+        self._model = model
+        self._client = client or httpx.Client()
+        self._timeouts = {"query": query_timeout, "document": document_timeout}
+        self._key = os.environ.get("VOYAGE_API_KEY", "")
+
+    def embed(self, texts: list[str], kind: str = "document") -> list[list[float]]:
+        if not self._key:
+            raise RuntimeError("VOYAGE_API_KEY is not set")
+        vectors: list[list[float]] = []
+        for start in range(0, len(texts), self.BATCH):
+            vectors += self._request(texts[start : start + self.BATCH], kind)
+        return vectors
+
+    def _request(self, texts: list[str], kind: str) -> list[list[float]]:
+        body = {"model": self._model, "input": texts, "input_type": kind, "output_dimension": self.dimensions}
+        for attempt in range(2):
+            response = self._client.post(
+                VOYAGE_EMBED_URL, headers={"Authorization": f"Bearer {self._key}"},
+                json=body, timeout=self._timeouts[kind],
+            )
+            # One retry for a rate limit or a server hiccup; anything else is the caller's to handle.
+            if response.status_code in (429, 500, 502, 503, 504) and attempt == 0:
+                time.sleep(1.0)
+                continue
+            response.raise_for_status()
+            data = sorted(response.json()["data"], key=lambda item: item["index"])
+            return [item["embedding"] for item in data]
+        raise AssertionError("unreachable")
 
 
 class HashEmbedder:
@@ -58,7 +88,7 @@ class HashEmbedder:
         self.name = f"hash:{dimensions}"
         self.dimensions = dimensions
 
-    def embed(self, texts: list[str]) -> list[list[float]]:
+    def embed(self, texts: list[str], kind: str = "document") -> list[list[float]]:
         return [self._one(text) for text in texts]
 
     def _one(self, text: str) -> list[float]:
@@ -72,10 +102,10 @@ class HashEmbedder:
 
 def make_embedder(settings: Settings) -> Embedder:
     provider = settings.embedding_provider
+    if provider == "voyage":
+        return VoyageEmbedder(settings.embedding_model, settings.embedding_dimensions)
     if provider == "fastembed":
         return FastEmbedder(settings.embedding_model)
-    if provider == "voyage":
-        return VoyageEmbedder(settings.embedding_model)
     if provider == "hash":
         return HashEmbedder()
     raise ValueError(f"unknown embedding provider: {provider}")

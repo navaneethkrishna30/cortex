@@ -72,7 +72,8 @@ def build_mcp(store: Store, instructions: str) -> CortexMCP:
         instead of searching again. `excluded` reports what was left out, with reasons and match counts for docs/ and logs/:
         if it shows matches there, tell the user. Use scope="all" to include docs/ and logs/ only
         when the user asks. exact=true does plain text matching. `reranked` says whether a reranker
-        ordered the results; false means the plain fused order."""
+        ordered the results; false means the plain fused order. `semantic: false` means the
+        embedder was down and only keywords matched: retry with other words if nothing fits."""
         return await _call(run_search, store.index, query, scope, exact, reranker=store.reranker)
 
     @mcp.tool(meta=ALWAYS_LOAD)

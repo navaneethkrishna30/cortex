@@ -26,8 +26,10 @@ class Settings:
     ui_port: int = 8766
     cookie_secure: bool = True
 
-    embedding_provider: str = "fastembed"
-    embedding_model: str = "BAAI/bge-small-en-v1.5"
+    # "voyage" needs VOYAGE_API_KEY; "fastembed" runs locally with the `local` extra.
+    embedding_provider: str = "voyage"
+    embedding_model: str = "voyage-4-lite"
+    embedding_dimensions: int = 1024
     context_tokens: int = 2000
     duplicate_threshold: float = 0.96
     quiet_seconds: float = 5.0
@@ -70,6 +72,7 @@ def load_settings(vault: str | Path | None = None) -> Settings:
         embedding = config.get("embedding", {})
         settings.embedding_provider = embedding.get("provider", settings.embedding_provider)
         settings.embedding_model = embedding.get("model", settings.embedding_model)
+        settings.embedding_dimensions = int(embedding.get("dimensions", settings.embedding_dimensions))
         for key in (
             "context_tokens",
             "duplicate_threshold",
@@ -85,4 +88,10 @@ def load_settings(vault: str | Path | None = None) -> Settings:
         ):
             if key in config:
                 setattr(settings, key, config[key])
+    # The environment wins, so a deployment can choose without writing into the vault.
+    for key, cast in (("embedding_provider", str), ("embedding_model", str),
+                      ("embedding_dimensions", int), ("rerank_provider", str), ("rerank_model", str)):
+        value = os.environ.get(f"CORTEX_{key.upper()}")
+        if value:
+            setattr(settings, key, cast(value))
     return settings
