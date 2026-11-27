@@ -21,11 +21,11 @@ class Flaky(HashEmbedder):
         self.down = False
         self.calls = 0
 
-    def embed(self, texts, kind="document"):
+    def embed(self, texts, kind="document", patient=False):
         self.calls += 1
         if self.down:
             raise httpx.ConnectError("voyage unreachable")
-        return super().embed(texts, kind)
+        return super().embed(texts, kind, patient)
 
 
 @pytest.fixture
@@ -118,12 +118,33 @@ def test_voyage_sends_kind_and_dimension_and_batches(monkeypatch):
     assert seen[-1]["input_type"] == "query"
 
 
-def test_voyage_needs_no_network_to_start_and_retries_a_rate_limit_once(monkeypatch):
-    replies = [httpx.Response(429), httpx.Response(200, json={"data": [{"index": 0, "embedding": [0.0] * 4}]})]
+def test_voyage_needs_no_network_to_start_and_only_backfill_retries(monkeypatch):
+    ok = {"data": [{"index": 0, "embedding": [0.0] * 4}]}
+    replies = [httpx.Response(429), httpx.Response(200, json=ok), httpx.Response(429)]
+    timeouts = []
+
+    def handler(request):
+        timeouts.append(request.extensions["timeout"]["read"])
+        return replies.pop(0)
+
     monkeypatch.setattr("cortex.embed.time.sleep", lambda s: None)
-    embedder = voyage(lambda request: replies.pop(0), monkeypatch)
+    embedder = voyage(handler, monkeypatch)
     assert embedder.dimensions == 4 and embedder.name == "voyage:voyage-4-lite"
-    assert embedder.embed(["x"]) == [[0.0] * 4]
+    assert embedder.embed(["x"], patient=True) == [[0.0] * 4]
+    with pytest.raises(httpx.HTTPStatusError):
+        embedder.embed(["x"], "query")
+    assert timeouts == [30.0, 30.0, 5.0]
+
+
+def test_backfill_after_an_outside_edit_runs_without_the_store_lock(store, flaky):
+    held = []
+    flaky.embed = lambda texts, kind="document", patient=False: (
+        held.append(store.lock._is_owned()) or HashEmbedder().embed(texts)
+    )
+    (store.vault.root / "docs").mkdir()
+    (store.vault.root / "docs/hand.md").write_text("# Hand\nEdited over SSH\n")
+    store.sync_outside_edits()
+    assert held == [False]
 
 
 def test_voyage_without_a_key_fails_the_call_not_the_start(monkeypatch):

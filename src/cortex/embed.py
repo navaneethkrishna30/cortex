@@ -1,8 +1,11 @@
-"""Pluggable embedders. Anything with `name`, `dimensions` and `embed(texts, kind)` works.
+"""Pluggable embedders. Anything with `name`, `dimensions` and `embed(texts, kind, patient)` works.
 
 `kind` is "document" for note chunks and "query" for search text; models that tell the two apart
 (Voyage) embed them differently, the others ignore it. An embedder may raise: the index keeps the
 note searchable by keyword and fills its vectors in later.
+
+`patient` is for the background backfill: a long timeout and a retry. Calls made while a write or
+a search waits are not patient: a few seconds, then the caller does without vectors.
 """
 
 from __future__ import annotations
@@ -22,7 +25,7 @@ class Embedder(Protocol):
     name: str
     dimensions: int
 
-    def embed(self, texts: list[str], kind: str = "document") -> list[list[float]]: ...
+    def embed(self, texts: list[str], kind: str = "document", patient: bool = False) -> list[list[float]]: ...
 
 
 class FastEmbedder:
@@ -35,7 +38,7 @@ class FastEmbedder:
         self._model = TextEmbedding(model_name=model)
         self.dimensions = len(self.embed(["dimension probe"])[0])
 
-    def embed(self, texts: list[str], kind: str = "document") -> list[list[float]]:
+    def embed(self, texts: list[str], kind: str = "document", patient: bool = False) -> list[list[float]]:
         return [vector.tolist() for vector in self._model.embed(texts)]
 
 
@@ -48,31 +51,31 @@ class VoyageEmbedder:
     BATCH = 128
 
     def __init__(self, model: str, dimensions: int, client: httpx.Client | None = None,
-                 query_timeout: float = 5.0, document_timeout: float = 30.0):
+                 quick_timeout: float = 5.0, patient_timeout: float = 30.0):
         self.name = f"voyage:{model}"
         self.dimensions = dimensions
         self._model = model
         self._client = client or httpx.Client()
-        self._timeouts = {"query": query_timeout, "document": document_timeout}
+        self._timeouts = {False: quick_timeout, True: patient_timeout}
         self._key = os.environ.get("VOYAGE_API_KEY", "")
 
-    def embed(self, texts: list[str], kind: str = "document") -> list[list[float]]:
+    def embed(self, texts: list[str], kind: str = "document", patient: bool = False) -> list[list[float]]:
         if not self._key:
             raise RuntimeError("VOYAGE_API_KEY is not set")
         vectors: list[list[float]] = []
         for start in range(0, len(texts), self.BATCH):
-            vectors += self._request(texts[start : start + self.BATCH], kind)
+            vectors += self._request(texts[start : start + self.BATCH], kind, patient)
         return vectors
 
-    def _request(self, texts: list[str], kind: str) -> list[list[float]]:
+    def _request(self, texts: list[str], kind: str, patient: bool) -> list[list[float]]:
         body = {"model": self._model, "input": texts, "input_type": kind, "output_dimension": self.dimensions}
         for attempt in range(2):
             response = self._client.post(
                 VOYAGE_EMBED_URL, headers={"Authorization": f"Bearer {self._key}"},
-                json=body, timeout=self._timeouts[kind],
+                json=body, timeout=self._timeouts[patient],
             )
-            # One retry for a rate limit or a server hiccup; anything else is the caller's to handle.
-            if response.status_code in (429, 500, 502, 503, 504) and attempt == 0:
+            # A patient call retries a rate limit or a server hiccup once; anything else is the caller's.
+            if patient and response.status_code in (429, 500, 502, 503, 504) and attempt == 0:
                 time.sleep(1.0)
                 continue
             response.raise_for_status()
@@ -88,7 +91,7 @@ class HashEmbedder:
         self.name = f"hash:{dimensions}"
         self.dimensions = dimensions
 
-    def embed(self, texts: list[str], kind: str = "document") -> list[list[float]]:
+    def embed(self, texts: list[str], kind: str = "document", patient: bool = False) -> list[list[float]]:
         return [self._one(text) for text in texts]
 
     def _one(self, text: str) -> list[float]:
