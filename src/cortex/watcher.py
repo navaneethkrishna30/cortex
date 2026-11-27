@@ -52,10 +52,13 @@ class Background:
         while not self.stop_event.is_set():
             if not self.changed.wait(BACKFILL_SECONDS):
                 # Quiet folder: a good moment to retry vectors the embedder failed to give earlier.
-                if self.store.index.pending_count():
-                    added = self.store.index.backfill()
-                    if added:
-                        log.info("backfilled %d vectors", added)
+                try:
+                    if self.store.index.pending_count():
+                        added = self.store.index.backfill()
+                        if added:
+                            log.info("backfilled %d vectors", added)
+                except Exception:
+                    log.exception("backfill failed")
                 continue
             # Wait for the folder to go quiet before treating the edit as finished.
             while self.changed.is_set() and not self.stop_event.is_set():

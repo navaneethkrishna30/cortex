@@ -116,7 +116,7 @@ class Index:
             self._create_vectors()
         return self.sync()
 
-    def sync(self) -> list[str]:
+    def sync(self, backfill: bool = True) -> list[str]:
         """Bring the index in line with the folder; only changed files are re-embedded.
 
         Returns the paths that changed or went, which is how outside edits are found. Changed
@@ -134,7 +134,8 @@ class Index:
         changed = stale + gone
         if changed:
             self.relink()
-        self.backfill()
+        if backfill:
+            self.backfill()
         return changed
 
     def backfill(self) -> int:
@@ -157,7 +158,7 @@ class Index:
                     return done
             try:
                 vectors = self.embedder.embed(
-                    [f"{r['path']}\n{r['heading']}\n{r['text']}" for r in rows], "document"
+                    [f"{r['path']}\n{r['heading']}\n{r['text']}" for r in rows], "document", patient=True
                 )
             except Exception as error:  # noqa: BLE001 - an embedder problem must never fail a write
                 log.warning("embedding %d chunks failed, keyword search only for now: %s", len(rows), error)

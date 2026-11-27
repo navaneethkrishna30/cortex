@@ -221,12 +221,14 @@ class Store:
         """
         with self.lock:
             fresh = self.index.is_empty()
-            changed = self.index.sync()
+            changed = self.index.sync(backfill=False)
             if changed and not fresh:
                 self.changes.append(HUMAN, "edit", changed)
             if changed:
                 self.on_change()
-            return changed
+        # Outside the store lock: a slow embedder must not hold up writes.
+        self.index.backfill()
+        return changed
 
     # Internals
 
