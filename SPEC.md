@@ -30,7 +30,7 @@ Not in the vault: status narratives, deploy trails, version lines, how a codebas
 
 - BM25 (FTS5) + vector, fused by RRF, plus `exact=true`. No graph expansion beyond 1 hop, no derived semantic/temporal links (measured: noise).
 - Each result carries `links` and `backlinks` (paths of notes it links to / is linked from), so the agent can follow a relation without another search.
-- **Rerank with Voyage** (`rerank-2.5` family or newer, configurable) over the top 30 fused candidates when `VOYAGE_API_KEY` is set and reranking is enabled. Timeout → fall back to the RRF order, never fail a search. Snippets leave the server for this (accepted by the owner, 2026-11-27). A local reranker (fastembed `jinaai/jina-reranker-v1-turbo-en`) is the later option once the server has CPU to spare.
+- **Rerank with Voyage** (`rerank-3` by default, configurable) over the top 30 fused candidates when `VOYAGE_API_KEY` is set and reranking is enabled. Timeout → fall back to the RRF order, never fail a search. Snippets leave the server for this (accepted by the owner, 2026-11-27). A local reranker (fastembed `jinaai/jina-reranker-v1-turbo-en`) is the later option once the server has CPU to spare.
 - Reranking is switched on only after it beats RRF on the eval set. Budget: whole search p50 < 2 s, p99 < 4 s; slower is acceptable if it is clearly better.
 - No query date parsing or recency boost until the eval set shows misses they would fix.
 
