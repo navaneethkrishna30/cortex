@@ -10,6 +10,7 @@ from .gitrepo import HUMAN, Git
 from .index import Index
 from .notes import (
     LINK,
+    STATUSES,
     SYSTEM_LINK_KEYS,
     add_history,
     field_links,
@@ -108,6 +109,7 @@ class Store:
                     raise VaultError(f"no such note: {clean}")
                 self._check_hash(clean, expected_hash)
             self._check_shape(clean, content, human)
+            self._check_limits(clean, content, self.vault.read_text(clean) if exists else None)
             verb = "edit" if exists else "write"
             return self._save({clean: content}, f"{verb}: {clean}", actor, clean)
 
@@ -131,6 +133,7 @@ class Store:
                 old = _plain(current.get(key)) or "(unset)"
                 new_text = add_history(new_text, f"{date.today()}: {key} {old} -> {_plain(value)} ({reason.strip()})")
             self._check_relations(new_text)
+            self._check_limits(clean, new_text, text)
             result = self._save({clean: new_text}, f"update: {clean} ({', '.join(changed)})", actor, clean)
             result["stale_copies"] = self._stale_copies(clean, [current.get(k) for k in changed])
             return result
@@ -145,15 +148,18 @@ class Store:
             if parse(old_text).status != "current":
                 raise VaultError(f"{old_path} is already {parse(old_text).status}")
             changes: dict[str, str] = {}
+            before: dict[str, str | None] = {old_path: old_text}
             if re.fullmatch(r"[\w./ -]+\.md", new.strip()):
                 new_path = self.vault.clean(new.strip(), must_exist=True)
                 self._check_writable(new_path)
                 new_text = self.vault.read_text(new_path)
+                before[new_path] = new_text
             else:
                 self._check_secret(new)
                 new_path = self._free_slug(old_path, new)
                 new_text = _with_status(new.strip() + "\n")
                 self._check_shape(new_path, new_text, False)
+                before[new_path] = None
             if new_path == old_path:
                 raise VaultError("a note cannot supersede itself")
             today = str(date.today())
@@ -161,6 +167,8 @@ class Store:
             old_text = set_fields(old_text, {"status": "superseded", "superseded_by": new_link, "valid_until": today})
             changes[old_path] = add_history(old_text, f"{today}: superseded by {new_link} ({reason.strip()})")
             changes[new_path] = set_fields(new_text, {"replaces": old_link})
+            for path, text in changes.items():
+                self._check_limits(path, text, before[path])
             return self._save(changes, f"supersede: {old_path} -> {new_path}", actor, new_path)
 
     def move(self, path: str, to: str, *, actor: str) -> dict:
@@ -250,6 +258,20 @@ class Store:
             if not body or "\n" in body:
                 raise VaultError("a memory line is one sentence on one line; longer detail belongs in a card or doc it links to")
         self._check_relations(content)
+
+    def _check_limits(self, path: str, content: str, before: str | None) -> None:
+        """Refuse a note that breaks a vault rule, unless it was already broken and got no worse.
+
+        Notes written before a rule existed must stay editable, so a fix can land in steps.
+        """
+        new = parse(content)
+        old = parse(before) if before is not None else None
+        status = new.declared_status
+        if status not in STATUSES and (old is None or old.declared_status != status):
+            raise VaultError(
+                f"status {status!r} is not allowed; use one of {', '.join(STATUSES)}. "
+                "Put versions or phases in a field of their own, such as phase:"
+            )
 
     def _check_relations(self, content: str) -> None:
         allowed = self.vault.relation_types()

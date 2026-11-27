@@ -154,9 +154,12 @@ def test_search_returns_eight_results_by_default(store):
 
 
 def test_update_can_change_status_with_a_history_line(store):
-    made = store.write("docs/guide.md", "---\nstatus: unread\n---\n# Guide\nStriped zebras.\n", actor="a")
+    # Written by hand before the status allow-list; Cortex itself would refuse it now.
+    (store.vault.root / "docs").mkdir()
+    (store.vault.root / "docs/guide.md").write_text("---\nstatus: unread\n---\n# Guide\nStriped zebras.\n")
+    store.index.sync()
     assert not search(store.index, "zebras", "all")["results"]
-    store.update("docs/guide.md", {"status": "current"}, "read it", made["hash"], actor="a")
+    store.update("docs/guide.md", {"status": "current"}, "read it", store.vault.hash("docs/guide.md"), actor="a")
     assert "status unread -> current (read it)" in store.vault.read_text("docs/guide.md")
     assert search(store.index, "zebras", "all")["results"]
 

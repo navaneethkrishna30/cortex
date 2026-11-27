@@ -66,7 +66,8 @@ A weekly headless agent run with its own `dreamer` token, working only through t
 | `expires` (query-time, memory index, duplicate check) | built, deployed 2026-11-27 |
 | First-prompt recall hook (Claude Code) | built, on the owner's laptop (client side, not in this repo) |
 | Vault cleanup to §1 | in progress |
-| B1–B9 below | to build |
+| B1 status allow-list | built |
+| B2–B9 below | to build |
 
 ## Build tickets
 

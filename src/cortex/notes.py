@@ -17,6 +17,8 @@ NEXT_HEADING = re.compile(r"^#{1,2} ", re.MULTILINE)
 ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 # Frontmatter keys Cortex itself owns; they never count as agent-chosen relations.
 SYSTEM_LINK_KEYS = {"superseded_by"}
+# Search shows only `current`, so any other word would hide a note by accident.
+STATUSES = ("current", "superseded", "expired", "retired")
 
 
 @dataclass
@@ -33,8 +35,13 @@ class Note:
         return value if ISO_DATE.fullmatch(value) else None
 
     @property
+    def declared_status(self) -> str:
+        """`status` as written, before expiry is applied; a missing one means current."""
+        return str(self.fields.get("status", "current"))
+
+    @property
     def status(self) -> str:
-        status = str(self.fields.get("status", "current"))
+        status = self.declared_status
         if status == "current" and self.expires and self.expires < date.today().isoformat():
             return "expired"
         return status
