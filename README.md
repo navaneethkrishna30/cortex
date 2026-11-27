@@ -69,7 +69,18 @@ If a client ignores MCP server instructions, tell it to call `read("@context")`.
 
 Set `CORTEX_PUBLIC_URL` to the address clients use.
 
-`deploy/cortex.service` is a hardened systemd unit. It expects a `cortex` user, an install in `/opt/cortex/.venv`, data under `/var/lib/cortex` and settings in `/etc/cortex.env`.
+To run it as a container, build the `Dockerfile` and mount one directory at `/data`. The vault goes in `/data/vault`, and the auth database and model caches sit beside it. Run the container as the user that owns that directory:
+
+```sh
+docker build -t cortex .
+docker run -d --restart always --user 1000:1000 -v /srv/cortex:/data \
+  -p 127.0.0.1:8765:8765 -p 127.0.0.1:8766:8766 \
+  -e CORTEX_PUBLIC_URL=https://your-host cortex
+```
+
+The image's healthcheck calls `GET /healthz` on the UI port. It answers only after the index responds to a query, and the public port does not serve it. The first start downloads the embedding model into `/data/cache`, so give it a few minutes.
+
+`deploy/cortex.service` is a hardened systemd unit for running without a container. It expects a `cortex` user, an install in `/opt/cortex/.venv`, data under `/var/lib/cortex` and settings in `/etc/cortex.env`.
 
 ## Configuration
 
@@ -82,6 +93,7 @@ Where things live is set by the environment:
 | `CORTEX_PUBLIC_URL` | `http://127.0.0.1:8765` |
 | `CORTEX_MCP_PORT` | `8765` |
 | `CORTEX_UI_PORT` | `8766` |
+| `CORTEX_HOST` | `127.0.0.1`; the image sets `0.0.0.0` |
 | `VOYAGE_API_KEY` | Unset; needed only for Voyage embeddings or reranking |
 
 How the vault behaves is set in `.cortex/config.toml` inside it:

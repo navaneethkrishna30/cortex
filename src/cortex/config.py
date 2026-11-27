@@ -60,6 +60,7 @@ def load_settings(vault: str | Path | None = None) -> Settings:
         vault=vault_path.resolve(),
         auth_db=auth_db,
         public_url=os.environ.get("CORTEX_PUBLIC_URL", "http://127.0.0.1:8765").rstrip("/"),
+        host=os.environ.get("CORTEX_HOST", "127.0.0.1"),
         mcp_port=int(os.environ.get("CORTEX_MCP_PORT", 8765)),
         ui_port=int(os.environ.get("CORTEX_UI_PORT", 8766)),
     )

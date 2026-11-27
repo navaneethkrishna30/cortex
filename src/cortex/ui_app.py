@@ -15,7 +15,7 @@ from jinja2 import Environment, PackageLoader, select_autoescape
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, RedirectResponse, Response
+from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
@@ -410,8 +410,16 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
             return page("error.html", 404, heading="Page not found", detail="This address doesn't lead anywhere in Cortex.")
         return page("error.html", exc.status_code, heading="Something went wrong", detail=str(exc.detail))
 
+    async def healthz(request: Request) -> JSONResponse:
+        """For the container healthcheck: proves the process serves and the index answers a query.
+        On the tailnet listener only, so the public internet never sees it."""
+        with store.index.lock:
+            notes = store.index.db.execute("SELECT count(*) FROM files").fetchone()[0]
+        return JSONResponse({"ok": True, "notes": notes})
+
     static = Path(__file__).parent / "static"
     return Starlette(routes=[
+        Route("/healthz", healthz),
         Route("/", lambda request: RedirectResponse("/ui", 303)),
         Route("/ui", guarded(home)),
         Route("/ui/setup", guarded(setup, login=False), methods=["GET", "POST"]),

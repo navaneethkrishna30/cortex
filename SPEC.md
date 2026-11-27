@@ -51,10 +51,10 @@ A weekly headless agent run with its own `dreamer` token, working only through t
 
 ### 6. Packaging and state
 
-- Python. Installed from a git tag into `/opt/cortex`; all state in `/var/lib/cortex`: vault (plain files, not a git repo), `auth.sqlite`, `.cortex/index.sqlite`, model cache.
+- Python, run as a container built from a git tag (`Dockerfile`); all state in one mounted directory (`/data` in the container): vault (plain files, not a git repo), `auth.sqlite`, `.cortex/index.sqlite`, model cache. `GET /healthz` on the UI listener is the healthcheck.
 - Every change appends one line to `<vault>/.cortex/changes.jsonl`: `{"at": "<UTC, YYYY-MM-DDTHH:MM:SSZ>", "actor": "<token name or human>", "action": "write|update|supersede|move|save_log|edit", "paths": [...]}`; `edit` is an outside edit the watcher saw, by `human`. The in-note History section is the only per-note history; there are no old versions. A leftover `.git` in the vault is ignored.
 - The index rebuilds itself when its schema version changes. Backup (the owner's job) copies the vault dir and `auth.sqlite`; index and model cache are rebuildable and excluded.
-- Deployed and maintained by the `cortex` playbook of the server's infra repo (owner builds it).
+- Deployed and maintained by the `cortex` playbook of the server's infra repo: compose with `restart: always`, a healthcheck, a memory limit and the host's compose watchdog; the public endpoint is a Tailscale Funnel on the MCP port.
 
 ## Built vs to build
 
@@ -93,4 +93,4 @@ Each ticket is sized for one agent session. Rules for every ticket: tests first 
 - **B9 Dreaming.** `clients/dreamer/`: the prompt (§5 rules, caps), a wrapper script (skip when the change log has no entries since the last run; snapshot the vault before the run; run a headless agent with only Cortex tools; after the run, restore from the pre-run snapshot any file a `dreamer` change-log entry touched whose body lost text; turn the agent's JSON proposals into one tracker task), and a systemd timer + service template. Server side: nothing new beyond a `dreamer` token. Tests for the skip logic, the revert check and the proposal formatting.
 - **B10 Vault without git.** The vault stops being a git repo: no `git init`, commits or pushes; files are written atomically (temp file + `os.replace`) under the store lock. `changelog.py` appends one line per change to `.cortex/changes.jsonl` (format in §6) and reads it back with `entries(since)`. The watcher logs outside edits as `human` `edit` and reindexes; an empty index logs nothing, having no baseline. The UI's per-note history lists that note's change-log entries (time, actor, action); no old versions. `cortex doctor` shows vault size and change-log entries. An existing `.git` is left on disk and ignored. Tests for each action's entry, outside edits, no `.git` on startup, an existing `.git` ignored.
 
-Owner steps (not for agents): the 50 eval questions with expected notes; the infra playbook (install from tag, `/etc/cortex.env` with `VOYAGE_API_KEY`, state dir, backup, timers); tagging releases.
+Owner steps (not for agents): the 50 eval questions with expected notes; `VOYAGE_API_KEY` for the playbook when reranking is switched on; installing the dreamer timer; tagging releases.
