@@ -1,0 +1,24 @@
+# Template: one dreaming run (clients/dreamer/README.md). Replace every <...> before installing.
+[Unit]
+Description=Cortex dreaming: weekly vault upkeep
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+# An unprivileged user that can read and write the vault's note folders (restores write a note
+# back) and read .cortex/changes.jsonl, with the agent CLI installed and authenticated. Not root, not the server's own account
+# unless you accept the agent running with the server's file access.
+User=<dreamer-user>
+Group=<dreamer-group>
+# DREAMER_VAULT, DREAMER_CMD, CORTEX_DREAMER_TOKEN, optional VIKUNJA_*; mode 600, owned by the user.
+EnvironmentFile=<path-to>/cortex-dreamer.env
+# Leave DREAMER_STATE_DIR unset to use this: systemd creates /var/lib/cortex-dreamer for the user.
+StateDirectory=cortex-dreamer
+Environment=DREAMER_STATE_DIR=%S/cortex-dreamer
+ExecStart=/usr/bin/python3 <install-dir>/dream.py
+TimeoutStartSec=2h
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true
+# No ProtectSystem=strict: the agent CLI writes its own config and caches under the user's home.

@@ -31,7 +31,14 @@ class Settings:
     context_tokens: int = 2000
     duplicate_threshold: float = 0.96
     quiet_seconds: float = 5.0
-    push_minutes: int = 15
+    # Characters of body (History left out). Memory stays a summary; detail belongs in its repo.
+    memory_body_limit: int = 300
+    entity_body_limit: int = 1200
+    # Off until it beats RRF on the eval set; "voyage" needs VOYAGE_API_KEY.
+    rerank_provider: str = "none"
+    rerank_model: str = "rerank-3"
+    rerank_timeout_s: float = 3.0
+    rerank_candidates: int = 30
     allowed_folders: list[str] = field(
         default_factory=lambda: ["core", "memory", "entities", "docs", "logs"]
     )
@@ -66,7 +73,12 @@ def load_settings(vault: str | Path | None = None) -> Settings:
             "context_tokens",
             "duplicate_threshold",
             "quiet_seconds",
-            "push_minutes",
+            "memory_body_limit",
+            "entity_body_limit",
+            "rerank_provider",
+            "rerank_model",
+            "rerank_timeout_s",
+            "rerank_candidates",
             "allowed_folders",
             "redirect_allowlist",
         ):

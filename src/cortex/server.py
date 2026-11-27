@@ -10,10 +10,10 @@ import uvicorn
 from .auth import AuthStore
 from .config import Settings
 from .embed import make_embedder
-from .gitrepo import Git
 from .index import Index
 from .mcp_server import build_mcp
 from .public_app import build_public_app
+from .rerank import make_reranker
 from .store import Store, build_context
 from .ui_app import build_ui_app
 from .vault import Vault
@@ -24,9 +24,9 @@ log = logging.getLogger("cortex")
 
 def open_store(settings: Settings) -> Store:
     vault = Vault(settings)
-    git = Git(settings.vault)
-    git.init()
-    return Store(vault, Index(vault, make_embedder(settings)), git)
+    store = Store(vault, Index(vault, make_embedder(settings)))
+    store.reranker = make_reranker(settings)
+    return store
 
 
 def build_apps(store: Store, auth: AuthStore, settings: Settings):

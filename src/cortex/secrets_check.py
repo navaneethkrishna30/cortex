@@ -1,4 +1,4 @@
-"""Refuse text that looks like a credential before it reaches git history."""
+"""Refuse text that looks like a credential before it lands in the vault, and so in its backups."""
 
 from __future__ import annotations
 

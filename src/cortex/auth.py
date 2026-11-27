@@ -1,6 +1,6 @@
 """The auth store: UI login, TOTP, tokens, the device-code login flow, the audit log.
 
-auth.sqlite lives outside the vault so secrets never enter git.
+auth.sqlite lives outside the vault so secrets never mix with notes; back it up beside the vault.
 """
 
 from __future__ import annotations

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import sqlite3
 import threading
@@ -11,6 +12,13 @@ import sqlite_vec
 from .embed import Embedder
 from .notes import body_links, chunks, parse, relation_edges, sha256
 from .vault import ARCHIVE, Vault
+
+log = logging.getLogger("cortex.index")
+
+# Bump whenever what the index holds changes, so existing indexes rebuild themselves on startup.
+# 2: bare relation values became edges.
+SCHEMA_VERSION = "2"
+DATA_TABLES = ("files", "chunks", "chunks_fts", "edges", "expiry")
 
 STOPWORDS = set("a an and are as at be by for from how i in is it my of on or that the to was what when where which who why with".split())
 
@@ -27,6 +35,8 @@ CREATE TABLE IF NOT EXISTS edges(
     src TEXT NOT NULL, relation TEXT NOT NULL, target TEXT NOT NULL, dst TEXT);
 CREATE INDEX IF NOT EXISTS edges_src ON edges(src);
 CREATE INDEX IF NOT EXISTS edges_dst ON edges(dst);
+-- Kept apart from files so a note's expiry is checked at query time, not only when indexed.
+CREATE TABLE IF NOT EXISTS expiry(path TEXT PRIMARY KEY, expires TEXT NOT NULL);
 """
 
 
@@ -53,6 +63,24 @@ class Index:
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.executescript(SCHEMA)
         self._ensure_vectors()
+        self._ensure_schema()
+
+    def _ensure_schema(self) -> None:
+        """An index from older code is rebuilt, since it can't be patched up row by row.
+
+        A fresh index has nothing to rebuild; an old one may predate the version key altogether.
+        """
+        stored = self._meta("schema_version")
+        if stored != SCHEMA_VERSION:
+            if self.db.execute("SELECT 1 FROM files LIMIT 1").fetchone():
+                log.info("index schema %s, code expects %s: rebuilding", stored or "unversioned", SCHEMA_VERSION)
+                # Recreated rather than emptied, so a changed table definition takes effect.
+                for table in DATA_TABLES:
+                    self.db.execute(f"DROP TABLE IF EXISTS {table}")
+                self.db.executescript(SCHEMA)
+                self.rebuild()
+            self.db.execute("INSERT OR REPLACE INTO meta VALUES('schema_version', ?)", (SCHEMA_VERSION,))
+            self.db.commit()
 
     def _meta(self, key: str) -> str | None:
         row = self.db.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
@@ -79,29 +107,35 @@ class Index:
         )
         self.db.commit()
 
-    def rebuild(self) -> int:
+    def rebuild(self) -> list[str]:
         with self.lock:
-            for table in ("files", "chunks", "chunks_fts", "edges"):
+            for table in DATA_TABLES:
                 self.db.execute(f"DELETE FROM {table}")
             self._create_vectors()
             return self.sync()
 
-    def sync(self) -> int:
-        """Bring the index in line with the folder; only changed files are re-embedded."""
+    def sync(self) -> list[str]:
+        """Bring the index in line with the folder; only changed files are re-embedded.
+
+        Returns the paths that changed or went, which is how outside edits are found.
+        """
         with self.lock:
             paths = self.vault.all_paths()
             known = {r["path"]: r["sha"] for r in self.db.execute("SELECT path, sha FROM files")}
-            changed = 0
+            changed = []
             for path in paths:
                 if known.get(path) != self.vault.hash(path):
                     self.index_file(path, relink=False)
-                    changed += 1
-            for path in set(known) - set(paths):
+                    changed.append(path)
+            for path in sorted(set(known) - set(paths)):
                 self.remove_file(path, relink=False)
-                changed += 1
+                changed.append(path)
             if changed:
                 self.relink()
             return changed
+
+    def is_empty(self) -> bool:
+        return self.db.execute("SELECT 1 FROM files LIMIT 1").fetchone() is None
 
     def index_file(self, path: str, relink: bool = True) -> None:
         # Archived notes open by path but are never searched.
@@ -116,6 +150,8 @@ class Index:
                 (path, sha256(text), path.split("/")[0], note.status, note.title,
                  (self.vault.root / path).stat().st_mtime),
             )
+            if note.expires:
+                self.db.execute("INSERT INTO expiry VALUES(?,?)", (path, note.expires))
             pieces = chunks(note)
             if pieces:
                 # The path joins the embedded text so a slug helps find its one-line note.
@@ -149,15 +185,17 @@ class Index:
             self.db.execute("DELETE FROM chunks_vec WHERE rowid=?", (row["id"],))
         self.db.execute("DELETE FROM chunks WHERE path=?", (path,))
         self.db.execute("DELETE FROM files WHERE path=?", (path,))
+        self.db.execute("DELETE FROM expiry WHERE path=?", (path,))
 
     def relink(self) -> None:
         """Recompute every edge. A vault is small, and targets move when any note appears or goes."""
         with self.lock:
             paths = self.vault.all_paths()
+            relations = self.vault.relation_types()
             self.db.execute("DELETE FROM edges")
             for path in paths:
                 note = self.vault.load(path)
-                edges = relation_edges(note) + [("links_to", target) for target in body_links(note)]
+                edges = relation_edges(note, relations) + [("links_to", target) for target in body_links(note)]
                 for relation, target in dict.fromkeys(edges):
                     self.db.execute(
                         "INSERT INTO edges VALUES(?,?,?,?)",
@@ -172,6 +210,16 @@ class Index:
     def backlinks(self, path: str) -> list[dict]:
         rows = self.db.execute("SELECT src, relation FROM edges WHERE dst=? AND src != ?", (path, path))
         return [dict(row) for row in rows]
+
+    def neighbours(self, path: str) -> dict[str, list[str]]:
+        """Paths this note links to and is linked from, so a search hit can be followed without another search."""
+        links = self.db.execute(
+            "SELECT DISTINCT dst FROM edges WHERE src=? AND dst IS NOT NULL AND dst != src ORDER BY dst", (path,)
+        )
+        backlinks = self.db.execute(
+            "SELECT DISTINCT src FROM edges WHERE dst=? AND src != dst ORDER BY src", (path,)
+        )
+        return {"links": [row["dst"] for row in links], "backlinks": [row["src"] for row in backlinks]}
 
     def broken_links(self) -> list[dict]:
         rows = self.db.execute(

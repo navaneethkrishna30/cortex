@@ -1,11 +1,11 @@
 # Cortex
 
-Shared memory for your AI agents. Cortex keeps what they know in a folder of markdown notes, tracks every change in git, and serves it all through one MCP server, so Claude, Cursor and any other MCP client work from the same rules, facts and history.
+Shared memory for your AI agents. Cortex keeps what they know in a folder of markdown notes, logs who changed what, and serves it all through one MCP server, so Claude, Cursor and any other MCP client work from the same rules, facts and history.
 
 - **Plain files.** Notes are markdown you can read, edit and move without Cortex. The search index can always be rebuilt from them.
 - **Local by default.** It runs on your machine and embeds notes locally. Voyage embeddings are optional.
 - **Rules agents can't quietly break.** Writes are refused if they would duplicate a live note, overwrite a newer edit, touch `core/` or include something that looks like a credential.
-- **Nothing is lost.** Every write is a git commit with the client's name on it. To forget a note, you move it to `.archive/`.
+- **Nothing is deleted.** Every change is a line in `.cortex/changes.jsonl` with the client's name on it. To forget a note, you move it to `.archive/`.
 
 ## How it works
 
@@ -13,9 +13,8 @@ Shared memory for your AI agents. Cortex keeps what they know in a folder of mar
 flowchart LR
     agents["Agents<br>Claude, Cursor, ..."] -->|"MCP, port 8765"| server["cortex serve"]
     you["You, in a browser"] -->|"web UI, port 8766"| server
-    server --> vault["Vault<br>markdown in a git repo"]
+    server --> vault["Vault<br>a folder of markdown"]
     server --> index["SQLite index<br>keyword and vector search"]
-    vault -->|"push every 15 minutes"| remote["Your private git remote"]
 ```
 
 At the start of a session, each agent receives `core/` and the memory index. It looks up anything else with the tools below.
@@ -35,14 +34,14 @@ Read-only tokens can't see or call the write tools.
 
 ## Quick start
 
-You need Python 3.12+, git and [uv](https://docs.astral.sh/uv/).
+You need Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 
 ```bash
 git clone https://github.com/navaneethkrishna30/cortex
 uv tool install ./cortex
 
-git clone https://github.com/navaneethkrishna30/cortex-vault-template ~/cortex-memory
-git -C ~/cortex-memory remote remove origin
+git clone --depth 1 https://github.com/navaneethkrishna30/cortex-vault-template ~/cortex-memory
+rm -rf ~/cortex-memory/.git   # the vault is plain files, not a repo
 
 CORTEX_VAULT=~/cortex-memory cortex serve
 ```
@@ -50,7 +49,7 @@ CORTEX_VAULT=~/cortex-memory cortex serve
 The first run prints a setup token. Open `http://127.0.0.1:8766/ui`, enter it, set a password and enrol an authenticator app.
 
 > [!WARNING]
-> Cortex pushes the vault to every git remote it has. Keep your own remote private.
+> Cortex keeps no old versions of notes. Backups are your job: copy the vault folder and `auth.sqlite` on a schedule. `.cortex/index.sqlite*` and the model cache rebuild on their own, so you can leave them out. A `.git` left in the vault by an older Cortex is ignored.
 
 ## Connect a client
 
@@ -83,23 +82,30 @@ Where things live is set by the environment:
 | `CORTEX_PUBLIC_URL` | `http://127.0.0.1:8765` |
 | `CORTEX_MCP_PORT` | `8765` |
 | `CORTEX_UI_PORT` | `8766` |
-| `VOYAGE_API_KEY` | Unset; needed only for Voyage embeddings |
+| `VOYAGE_API_KEY` | Unset; needed only for Voyage embeddings or reranking |
 
 How the vault behaves is set in `.cortex/config.toml` inside it:
 
 ```toml
 context_tokens = 2000       # budget for what agents receive at session start
 duplicate_threshold = 0.96  # how similar a new note must be to count as a duplicate
-quiet_seconds = 5.0         # wait after outside edits before committing them
-push_minutes = 15           # how often to push to remotes
+quiet_seconds = 5.0         # wait after outside edits before reindexing and logging them
+memory_body_limit = 300     # longest memory line, in characters
+entity_body_limit = 1200    # longest card body, History left out
 allowed_folders = ["core", "memory", "entities", "docs", "logs"]
+rerank_provider = "none"    # or "voyage", which needs VOYAGE_API_KEY
+rerank_model = "rerank-3"
+rerank_timeout_s = 3        # slower than this, search keeps its own order
+rerank_candidates = 30      # how many top notes the reranker reorders
 
 [embedding]
 provider = "fastembed"      # or "voyage"
 model = "BAAI/bge-small-en-v1.5"
 ```
 
-Run `cortex index --rebuild` after changing the embedding model.
+Reranking is off by default. When it is on, agent searches send the query and one snippet per candidate note to Voyage, which reorders them. A timeout, an error or a missing key never fails a search: results keep their usual order and say `reranked: false`. The web UI's search and `exact=true` are never reranked.
+
+Run `cortex index --rebuild` after changing the embedding model. A new Cortex version that changes what the index holds rebuilds it on startup by itself.
 
 ## Commands
 
@@ -107,8 +113,8 @@ Run `cortex index --rebuild` after changing the embedding model.
 |---|---|
 | `cortex serve` | Run the MCP and UI listeners |
 | `cortex index [--rebuild]` | Sync the index, or re-embed everything |
-| `cortex doctor` | Show index size, repo size, remotes and broken links |
-| `cortex eval FILE` | Score search against a TSV of questions and expected paths |
+| `cortex doctor` | Show index size, vault size, change-log entries and broken links |
+| `cortex eval FILE [--rerank on\|off] [--json]` | Score search against a TSV of questions and expected paths: hit@1, hit@8, MRR, latency and misses |
 | `cortex auth reset` | Restart UI setup after losing a password or authenticator |
 
 ## Develop
@@ -118,7 +124,7 @@ uv run pytest
 uv run cortex --vault "$(mktemp -d)" doctor
 ```
 
-`tests/eval` holds a small search eval. Copy its vault somewhere temporary before running it. UI conventions are in [DESIGN.md](DESIGN.md).
+`tests/eval` holds a small search eval. Copy its vault somewhere temporary before running it. Each line of a question file is `question<TAB>expected path`; write `path1|path2` when either note answers it. Run it with `--rerank off` and `--rerank on` to see whether reranking helps. UI conventions are in [DESIGN.md](DESIGN.md).
 
 ## License
 

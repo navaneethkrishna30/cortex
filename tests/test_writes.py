@@ -7,10 +7,10 @@ CARD = "---\nstatus: current\nlocated_in: [[server]]\nport: 8080\n---\n# App\nTh
 
 
 def last_author(store):
-    return store.git.run("log", "-1", "--format=%an").strip()
+    return store.changes.entries()[-1]["actor"]
 
 
-def test_write_commits_and_names_the_token(store):
+def test_write_logs_and_names_the_token(store):
     store.write("memory/likes-postgres.md", "Prefers Postgres.", actor="laptop")
     assert last_author(store) == "laptop"
     assert "status: current" in store.vault.read_text("memory/likes-postgres.md")
@@ -75,9 +75,9 @@ def test_update_edits_in_place_keeps_history_and_finds_stale_copies(store):
 
 def test_update_unchanged_is_a_no_op(store):
     made = store.write("entities/app.md", CARD, actor="a")
-    head = store.git.run("rev-parse", "HEAD")
-    assert store.update("entities/app.md", {"port": 8080}, "same", made["hash"], actor="a")["commit"] is None
-    assert store.git.run("rev-parse", "HEAD") == head
+    count = store.changes.count()
+    assert store.update("entities/app.md", {"port": 8080}, "same", made["hash"], actor="a")["hash"] == made["hash"]
+    assert store.changes.count() == count
 
 
 def test_moving_relation_flips_backlinks(store):
@@ -92,9 +92,9 @@ def test_moving_relation_flips_backlinks(store):
 
 def test_supersede_with_text_hides_old_from_search_and_context(store):
     store.write("memory/focus.md", "Current focus is gardening.", actor="a")
-    head_count = int(store.git.run("rev-list", "--count", "HEAD"))
+    count = store.changes.count()
     result = store.supersede("memory/focus.md", "Current focus is beekeeping.", "changed", actor="a")
-    assert int(store.git.run("rev-list", "--count", "HEAD")) == head_count + 1
+    assert store.changes.count() == count + 1
     old = store.read("memory/focus.md")
     assert "status: superseded" in old["content"] and "superseded by" in old["history"]
     found = search(store.index, "current focus", None)
@@ -113,7 +113,7 @@ def test_move_rewrites_links_and_archive_forgets(store):
     assert not (store.vault.root / "entities/app.md").exists()
     store.move("entities/service.md", ".archive/service.md", actor="a")
     assert not [r for r in search(store.index, "app", None)["results"] if "service" in r["path"]]
-    assert store.git.dirty_paths() == []
+    assert store.sync_outside_edits() == []
 
 
 def test_archive_stays_out_of_every_search_but_still_opens(store):
@@ -154,9 +154,12 @@ def test_search_returns_eight_results_by_default(store):
 
 
 def test_update_can_change_status_with_a_history_line(store):
-    made = store.write("docs/guide.md", "---\nstatus: unread\n---\n# Guide\nStriped zebras.\n", actor="a")
+    # Written by hand before the status allow-list; Cortex itself would refuse it now.
+    (store.vault.root / "docs").mkdir()
+    (store.vault.root / "docs/guide.md").write_text("---\nstatus: unread\n---\n# Guide\nStriped zebras.\n")
+    store.index.sync()
     assert not search(store.index, "zebras", "all")["results"]
-    store.update("docs/guide.md", {"status": "current"}, "read it", made["hash"], actor="a")
+    store.update("docs/guide.md", {"status": "current"}, "read it", store.vault.hash("docs/guide.md"), actor="a")
     assert "status unread -> current (read it)" in store.vault.read_text("docs/guide.md")
     assert search(store.index, "zebras", "all")["results"]
 
@@ -189,6 +192,18 @@ def test_move_reports_live_notes_still_linking(store):
     assert "[[.archive/docs/guide]]" in store.vault.read_text("entities/app.md")
 
 
+def test_logs_can_be_archived_but_not_moved_elsewhere(store):
+    # Dreaming archives logs/ older than 30 days (SPEC §5); logs stay append-only otherwise.
+    store.save_log("daily", "old note", "2026-01-15", actor="a")
+    store.write("docs/notes.md", "# Notes\nSee [[logs/daily/2026-01-15]].\n", actor="a")
+    with pytest.raises(VaultError, match="append-only"):
+        store.move("logs/daily/2026-01-15.md", "docs/2026-01-15.md", actor="dreamer")
+    store.move("logs/daily/2026-01-15.md", ".archive/logs/daily/2026-01-15.md", actor="dreamer")
+    assert "old note" in store.vault.read_text(".archive/logs/daily/2026-01-15.md")
+    assert not (store.vault.root / "logs/daily/2026-01-15.md").exists()
+    assert last_author(store) == "dreamer"
+
+
 def test_save_log_appends_and_search_reports_it(store):
     store.save_log("daily", "talked about zebras", actor="a")
     store.save_log("daily", "more zebras", actor="a")
@@ -208,7 +223,7 @@ def test_secrets_refused_everywhere(store, secret):
         store.save_log("raw", secret, actor="a")
 
 
-def test_outside_edit_committed_as_human(store):
+def test_outside_edit_is_reindexed(store):
     (store.vault.root / "docs").mkdir()
     (store.vault.root / "docs/hand.md").write_text("# Hand\nEdited over SSH\n")
     assert store.sync_outside_edits() == ["docs/hand.md"]

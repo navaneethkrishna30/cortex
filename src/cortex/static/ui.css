@@ -270,7 +270,6 @@ details[open] > summary .chevron { transform: rotate(90deg); }
 .linked-from { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); margin-top: var(--s-7); padding-top: var(--s-5); border-top: var(--border); }
 .linked-from strong { font-weight: 800; }
 .linked-from a { padding: 0 var(--s-3); font: var(--code); line-height: 28px; background: var(--folder); border: 2px solid var(--line); border-radius: 6px; text-decoration: none; }
-.linked-from .small { margin-left: auto; }
 
 /* Note actions menu */
 .menu { position: relative; }
@@ -295,7 +294,6 @@ details[open] > summary .chevron { transform: rotate(90deg); }
 .list .muted { flex: none; font: 500 var(--text-sm); }
 .list .snippet { display: block; margin-top: var(--s-1); font: 500 var(--text-sm); }
 .list .stacked { display: block; min-width: 0; }
-.source-view { margin: 0; font: var(--editor); white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* Narrow screens: one pane at a time. */
 @media (max-width: 900px) {

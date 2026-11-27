@@ -1,4 +1,4 @@
-"""Every change to the vault goes through here: one queue, index first, then one commit."""
+"""Every change to the vault goes through here: one queue, files then index, then one change-log line."""
 
 from __future__ import annotations
 
@@ -6,10 +6,11 @@ import re
 import threading
 from datetime import date, datetime
 
-from .gitrepo import HUMAN, Git
+from .changelog import HUMAN, ChangeLog
 from .index import Index
 from .notes import (
     LINK,
+    STATUSES,
     SYSTEM_LINK_KEYS,
     add_history,
     field_links,
@@ -60,12 +61,14 @@ def build_context(vault: Vault) -> str:
 
 
 class Store:
-    def __init__(self, vault: Vault, index: Index, git: Git):
+    def __init__(self, vault: Vault, index: Index):
         self.vault = vault
         self.index = index
-        self.git = git
+        self.changes = ChangeLog(vault.settings.state_dir / "changes.jsonl")
         self.lock = threading.RLock()
         self.on_change = lambda: None
+        # Agent searches rerank through this when the vault turns it on; None keeps RRF order.
+        self.reranker = None
 
     # Reads
 
@@ -108,8 +111,8 @@ class Store:
                     raise VaultError(f"no such note: {clean}")
                 self._check_hash(clean, expected_hash)
             self._check_shape(clean, content, human)
-            verb = "edit" if exists else "write"
-            return self._save({clean: content}, f"{verb}: {clean}", actor, clean)
+            self._check_limits(clean, content, self.vault.read_text(clean) if exists else None)
+            return self._save({clean: content}, "write", actor, clean)
 
     def update(self, path: str, fields: dict, reason: str, expected_hash: str, *, actor: str) -> dict:
         clean = self.vault.clean(path, must_exist=True)
@@ -125,13 +128,14 @@ class Store:
             current = parse(text).fields
             changed = {k: v for k, v in fields.items() if _plain(current.get(k)) != _plain(v)}
             if not changed:
-                return {"path": clean, "hash": sha256(text), "commit": None, "stale_copies": []}
+                return {"path": clean, "hash": sha256(text), "stale_copies": []}
             new_text = set_fields(text, changed)
             for key, value in changed.items():
                 old = _plain(current.get(key)) or "(unset)"
                 new_text = add_history(new_text, f"{date.today()}: {key} {old} -> {_plain(value)} ({reason.strip()})")
             self._check_relations(new_text)
-            result = self._save({clean: new_text}, f"update: {clean} ({', '.join(changed)})", actor, clean)
+            self._check_limits(clean, new_text, text)
+            result = self._save({clean: new_text}, "update", actor, clean)
             result["stale_copies"] = self._stale_copies(clean, [current.get(k) for k in changed])
             return result
 
@@ -145,15 +149,18 @@ class Store:
             if parse(old_text).status != "current":
                 raise VaultError(f"{old_path} is already {parse(old_text).status}")
             changes: dict[str, str] = {}
+            before: dict[str, str | None] = {old_path: old_text}
             if re.fullmatch(r"[\w./ -]+\.md", new.strip()):
                 new_path = self.vault.clean(new.strip(), must_exist=True)
                 self._check_writable(new_path)
                 new_text = self.vault.read_text(new_path)
+                before[new_path] = new_text
             else:
                 self._check_secret(new)
                 new_path = self._free_slug(old_path, new)
                 new_text = _with_status(new.strip() + "\n")
                 self._check_shape(new_path, new_text, False)
+                before[new_path] = None
             if new_path == old_path:
                 raise VaultError("a note cannot supersede itself")
             today = str(date.today())
@@ -161,12 +168,16 @@ class Store:
             old_text = set_fields(old_text, {"status": "superseded", "superseded_by": new_link, "valid_until": today})
             changes[old_path] = add_history(old_text, f"{today}: superseded by {new_link} ({reason.strip()})")
             changes[new_path] = set_fields(new_text, {"replaces": old_link})
-            return self._save(changes, f"supersede: {old_path} -> {new_path}", actor, new_path)
+            for path, text in changes.items():
+                self._check_limits(path, text, before[path])
+            return self._save(changes, "supersede", actor, new_path)
 
     def move(self, path: str, to: str, *, actor: str) -> dict:
         source = self.vault.clean(path, must_exist=True)
-        self._check_writable(source)
         target = self.vault.clean(to, archive_ok=True)
+        # Logs are append-only, but old ones must leave logs/ for .archive/ (dreaming, SPEC §5).
+        if not (source.startswith("logs/") and target.startswith(ARCHIVE + "/")):
+            self._check_writable(source)
         if not target.startswith(ARCHIVE + "/"):
             self._check_writable(target)
         with self.lock:
@@ -183,7 +194,7 @@ class Store:
             (self.vault.root / source).unlink()
             self.index.remove_file(source, relink=False)
             linked_from = sorted(path for path in changes if path != target)
-            result = self._save(changes, f"move: {source} -> {target}", actor, target, removed=[source])
+            result = self._save(changes, "move", actor, target, removed=[source])
             return {**result, "linked_from": linked_from}
 
     def save_log(self, kind: str, text: str, day: str | None = None, *, actor: str) -> dict:
@@ -200,30 +211,42 @@ class Store:
             full = self.vault.root / path
             existing = full.read_text() if full.exists() else f"# {kind} {day}\n"
             entry = f"{existing.rstrip()}\n\n## {heading} ({actor})\n{text.strip()}\n"
-            return self._save({path: entry}, f"log: {path}", actor, path)
+            return self._save({path: entry}, "save_log", actor, path)
 
     def sync_outside_edits(self) -> list[str]:
-        """Pick up edits made outside Cortex: reindex them and commit them as human."""
+        """Pick up edits made outside Cortex: reindex them and log them as a human edit.
+
+        The index is the baseline: a file whose hash differs from its indexed one changed outside.
+        An empty index (first start, or index.sqlite lost) has no baseline, so nothing is logged.
+        """
         with self.lock:
-            prefixes = tuple(f"{f}/" for f in self.vault.settings.allowed_folders)
-            dirty = [p for p in self.git.dirty_paths() if p.startswith(prefixes)]
-            self.index.sync()
-            if dirty:
-                self.git.commit("edit: outside change", HUMAN, dirty)
+            fresh = self.index.is_empty()
+            changed = self.index.sync()
+            if changed and not fresh:
+                self.changes.append(HUMAN, "edit", changed)
+            if changed:
                 self.on_change()
-            return dirty
+            return changed
 
     # Internals
 
-    def _save(self, changes: dict[str, str], message: str, actor: str, primary: str, removed: list[str] | None = None) -> dict:
+    def _save(self, changes: dict[str, str], action: str, actor: str, primary: str, removed: list[str] | None = None) -> dict:
+        # A save that changes nothing leaves no trace, so "no entries" really means no change.
+        changes = {p: t for p, t in changes.items() if not self._same_on_disk(p, t)}
+        removed = removed or []
         for path, text in changes.items():
             self.vault.write_text(path, text)
         for path in changes:
             self.index.index_file(path, relink=False)
-        self.index.relink()
-        commit = self.git.commit(message, actor, list(changes) + (removed or []))
-        self.on_change()
-        return {"path": primary, "hash": self.vault.hash(primary), "commit": commit}
+        if changes or removed:
+            self.index.relink()
+            self.changes.append(actor, action, removed + list(changes))
+            self.on_change()
+        return {"path": primary, "hash": self.vault.hash(primary)}
+
+    def _same_on_disk(self, path: str, text: str) -> bool:
+        full = self.vault.root / path
+        return full.is_file() and full.read_text(encoding="utf-8") == text
 
     def _check_writable(self, path: str, human: bool = False) -> None:
         folder = path.split("/")[0]
@@ -251,6 +274,32 @@ class Store:
                 raise VaultError("a memory line is one sentence on one line; longer detail belongs in a card or doc it links to")
         self._check_relations(content)
 
+    def _check_limits(self, path: str, content: str, before: str | None) -> None:
+        """Refuse a note that breaks a vault rule, unless it was already broken and got no worse.
+
+        Notes written before a rule existed must stay editable, so a fix can land in steps.
+        """
+        new = parse(content)
+        old = parse(before) if before is not None else None
+        status = new.declared_status
+        if status not in STATUSES and (old is None or old.declared_status != status):
+            raise VaultError(
+                f"status {status!r} is not allowed; use one of {', '.join(STATUSES)}. "
+                "Put versions or phases in a field of their own, such as phase:"
+            )
+        limit = self._body_limit(path)
+        size = len(new.body_without_history.strip())
+        if limit is not None and size > limit and (old is None or size > len(old.body_without_history.strip())):
+            raise VaultError(
+                f"{path} has {size} characters of body; {path.split('/')[0]}/ allows {limit} characters. "
+                "move detail to the repo; link it"
+            )
+
+    def _body_limit(self, path: str) -> int | None:
+        """Only memory lines and cards have a size limit; docs/, core/ and logs/ hold longer text."""
+        settings = self.vault.settings
+        return {"memory": settings.memory_body_limit, "entities": settings.entity_body_limit}.get(path.split("/")[0])
+
     def _check_relations(self, content: str) -> None:
         allowed = self.vault.relation_types()
         if not allowed:
@@ -276,7 +325,8 @@ class Store:
         stem = path.rsplit("/", 1)[-1].lower()
         title = parse(content).title.lower()
         rows = self.index.db.execute(
-            "SELECT path, title FROM files WHERE status='current' AND folder IN ('memory','entities','docs')"
+            "SELECT path, title FROM files WHERE status='current' AND folder IN ('memory','entities','docs') "
+            "AND path NOT IN (SELECT path FROM expiry WHERE expires < date('now','localtime'))"
         ).fetchall()
         for row in rows:
             same_name = row["path"].rsplit("/", 1)[-1].lower() == stem and row["path"].split("/")[0] != "docs"
