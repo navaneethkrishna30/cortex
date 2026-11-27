@@ -13,6 +13,8 @@ DEFAULT_LIMIT = 8
 MIN_SHARE_OF_TOP_SCORE = 0.5
 RRF_K = 60
 CANDIDATES = 50
+# A current note past its `expires` date counts as expired from that day on, without a reindex.
+STATUS = "CASE WHEN f.status='current' AND e.expires < date('now','localtime') THEN 'expired' ELSE f.status END"
 
 
 def _keyword_ranking(index: Index, query: str) -> list[int]:
@@ -66,8 +68,8 @@ def search(index: Index, query: str, scope: str | None = None, exact: bool = Fal
             if top_score is not None and scores[rowid] < top_score * MIN_SHARE_OF_TOP_SCORE:
                 break
             row = index.db.execute(
-                "SELECT c.path, c.heading, c.text, f.folder, f.status, f.title FROM chunks c "
-                "JOIN files f USING(path) WHERE c.id=?", (rowid,)
+                f"SELECT c.path, c.heading, c.text, f.folder, {STATUS} AS status, f.title FROM chunks c "
+                "JOIN files f USING(path) LEFT JOIN expiry e USING(path) WHERE c.id=?", (rowid,)
             ).fetchone()
             if row is None or row["folder"] == UNSEARCHED_FOLDER or (scope != "all" and row["folder"] not in DEFAULT_FOLDERS):
                 continue
@@ -87,7 +89,8 @@ def _exact(index: Index, query: str, scope: str | None, limit: int) -> dict:
     needle = query.lower()
     results, hidden = [], {}
     rows = index.db.execute(
-        "SELECT path, folder, status FROM files WHERE folder != ? ORDER BY path", (UNSEARCHED_FOLDER,)
+        f"SELECT f.path, f.folder, {STATUS} AS status FROM files f LEFT JOIN expiry e USING(path) "
+        "WHERE f.folder != ? ORDER BY f.path", (UNSEARCHED_FOLDER,)
     ).fetchall()
     outside: dict[str, int] = {}
     for row in rows:

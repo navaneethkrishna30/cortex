@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass, field
+from datetime import date
 
 import yaml
 
@@ -13,6 +14,7 @@ LINK = re.compile(r"\[\[([^\]|#\n]+)(?:[#|][^\]\n]*)?\]\]")
 FRONTMATTER = re.compile(r"\A---\n(.*?\n)?---\n?", re.DOTALL)
 HISTORY = re.compile(r"^## History[ \t]*$", re.MULTILINE)
 NEXT_HEADING = re.compile(r"^#{1,2} ", re.MULTILINE)
+ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 # Frontmatter keys Cortex itself owns; they never count as agent-chosen relations.
 SYSTEM_LINK_KEYS = {"superseded_by"}
 
@@ -25,8 +27,17 @@ class Note:
     body: str = ""
 
     @property
+    def expires(self) -> str | None:
+        """`expires: YYYY-MM-DD` in frontmatter; anything else is ignored."""
+        value = str(self.fields.get("expires", ""))
+        return value if ISO_DATE.fullmatch(value) else None
+
+    @property
     def status(self) -> str:
-        return str(self.fields.get("status", "current"))
+        status = str(self.fields.get("status", "current"))
+        if status == "current" and self.expires and self.expires < date.today().isoformat():
+            return "expired"
+        return status
 
     @property
     def title(self) -> str:

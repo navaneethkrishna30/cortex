@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS edges(
     src TEXT NOT NULL, relation TEXT NOT NULL, target TEXT NOT NULL, dst TEXT);
 CREATE INDEX IF NOT EXISTS edges_src ON edges(src);
 CREATE INDEX IF NOT EXISTS edges_dst ON edges(dst);
+-- Kept apart from files so a note's expiry is checked at query time, not only when indexed.
+CREATE TABLE IF NOT EXISTS expiry(path TEXT PRIMARY KEY, expires TEXT NOT NULL);
 """
 
 
@@ -81,7 +83,7 @@ class Index:
 
     def rebuild(self) -> int:
         with self.lock:
-            for table in ("files", "chunks", "chunks_fts", "edges"):
+            for table in ("files", "chunks", "chunks_fts", "edges", "expiry"):
                 self.db.execute(f"DELETE FROM {table}")
             self._create_vectors()
             return self.sync()
@@ -116,6 +118,8 @@ class Index:
                 (path, sha256(text), path.split("/")[0], note.status, note.title,
                  (self.vault.root / path).stat().st_mtime),
             )
+            if note.expires:
+                self.db.execute("INSERT INTO expiry VALUES(?,?)", (path, note.expires))
             pieces = chunks(note)
             if pieces:
                 # The path joins the embedded text so a slug helps find its one-line note.
@@ -149,6 +153,7 @@ class Index:
             self.db.execute("DELETE FROM chunks_vec WHERE rowid=?", (row["id"],))
         self.db.execute("DELETE FROM chunks WHERE path=?", (path,))
         self.db.execute("DELETE FROM files WHERE path=?", (path,))
+        self.db.execute("DELETE FROM expiry WHERE path=?", (path,))
 
     def relink(self) -> None:
         """Recompute every edge. A vault is small, and targets move when any note appears or goes."""

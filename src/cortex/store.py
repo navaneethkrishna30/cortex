@@ -276,7 +276,8 @@ class Store:
         stem = path.rsplit("/", 1)[-1].lower()
         title = parse(content).title.lower()
         rows = self.index.db.execute(
-            "SELECT path, title FROM files WHERE status='current' AND folder IN ('memory','entities','docs')"
+            "SELECT path, title FROM files WHERE status='current' AND folder IN ('memory','entities','docs') "
+            "AND path NOT IN (SELECT path FROM expiry WHERE expires < date('now','localtime'))"
         ).fetchall()
         for row in rows:
             same_name = row["path"].rsplit("/", 1)[-1].lower() == stem and row["path"].split("/")[0] != "docs"
