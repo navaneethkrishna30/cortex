@@ -72,7 +72,8 @@ A weekly headless agent run with its own `dreamer` token, working only through t
 | B4 links in search results | built |
 | B5 index schema version | built |
 | B6 Voyage rerank | built, off by default |
-| B7–B9 below | to build |
+| B7 eval harness | built |
+| B8–B9 below | to build |
 
 ## Build tickets
 

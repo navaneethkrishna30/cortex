@@ -116,7 +116,7 @@ Run `cortex index --rebuild` after changing the embedding model. A new Cortex ve
 | `cortex serve` | Run the MCP and UI listeners |
 | `cortex index [--rebuild]` | Sync the index, or re-embed everything |
 | `cortex doctor` | Show index size, repo size, remotes and broken links |
-| `cortex eval FILE` | Score search against a TSV of questions and expected paths |
+| `cortex eval FILE [--rerank on\|off] [--json]` | Score search against a TSV of questions and expected paths: hit@1, hit@8, MRR, latency and misses |
 | `cortex auth reset` | Restart UI setup after losing a password or authenticator |
 
 ## Develop
@@ -126,7 +126,7 @@ uv run pytest
 uv run cortex --vault "$(mktemp -d)" doctor
 ```
 
-`tests/eval` holds a small search eval. Copy its vault somewhere temporary before running it. UI conventions are in [DESIGN.md](DESIGN.md).
+`tests/eval` holds a small search eval. Copy its vault somewhere temporary before running it. Each line of a question file is `question<TAB>expected path`; write `path1|path2` when either note answers it. Run it with `--rerank off` and `--rerank on` to see whether reranking helps. UI conventions are in [DESIGN.md](DESIGN.md).
 
 ## License
 

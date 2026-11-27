@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import csv
-from pathlib import Path
+import json
+import sys
+from dataclasses import replace
 
+from . import evaluation
 from .auth import AuthStore
 from .config import load_settings
-from .search import search
 from .server import open_store, serve
 
 
@@ -28,19 +29,19 @@ def doctor(settings) -> None:
         print(f"  {link['src']} -> [[{link['target']}]]")
 
 
-def run_eval(settings, file: str) -> None:
-    """TSV of question<TAB>expected path. Prints hit@1, hit@3 and the misses."""
+def run_eval(settings, file: str, rerank: str | None = None, as_json: bool = False) -> None:
+    """Score search on a question TSV. `rerank` on/off overrides the vault's setting for this run,
+    so the owner can compare the two on the same questions."""
+    if rerank is not None:
+        settings = replace(settings, rerank_provider="voyage" if rerank == "on" else "none")
     store = open_store(settings)
     store.index.sync()
-    rows = [r for r in csv.reader(Path(file).open(), delimiter="\t") if r and not r[0].startswith("#")]
-    first = top3 = 0
-    for question, expected in rows:
-        paths = [r["path"] for r in search(store.index, question, "all")["results"]]
-        first += paths[:1] == [expected]
-        top3 += expected in paths[:3]
-        if expected not in paths[:1]:
-            print(f"miss: {question!r} wanted {expected}, got {paths[:3]}")
-    print(f"hit@1 {first}/{len(rows)}  hit@3 {top3}/{len(rows)}")
+    report = evaluation.run(store.index, evaluation.load_questions(file), store.reranker)
+    if rerank == "on" and report["reranked"] < report["questions"]:
+        # Otherwise an "on" run that quietly fell back looks like a fair comparison.
+        print(f"warning: {report['questions'] - report['reranked']} of {report['questions']} searches "
+              "not reranked (check VOYAGE_API_KEY and the log)", file=sys.stderr)
+    print(json.dumps(report, indent=2) if as_json else evaluation.format_report(report))
 
 
 def main() -> None:
@@ -52,7 +53,9 @@ def main() -> None:
     index_parser.add_argument("--rebuild", action="store_true", help="delete and re-embed everything")
     commands.add_parser("doctor", help="index size, repo size, broken links")
     eval_parser = commands.add_parser("eval", help="score search against a question file")
-    eval_parser.add_argument("file")
+    eval_parser.add_argument("file", help="TSV: question<TAB>expected path, or path1|path2")
+    eval_parser.add_argument("--rerank", choices=["on", "off"], help="force reranking on or off for this run")
+    eval_parser.add_argument("--json", action="store_true", help="print the report as JSON")
     auth_parser = commands.add_parser("auth", help="recovery")
     auth_parser.add_argument("action", choices=["reset"])
     args = parser.parse_args()
@@ -70,7 +73,7 @@ def main() -> None:
     elif args.command == "doctor":
         doctor(settings)
     elif args.command == "eval":
-        run_eval(settings, args.file)
+        run_eval(settings, args.file, args.rerank, args.json)
     elif args.command == "auth":
         AuthStore(settings.auth_db).reset()
         print("Auth reset. Restart the server for a new setup token.")
