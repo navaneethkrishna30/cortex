@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import sqlite3
 import threading
@@ -11,6 +12,13 @@ import sqlite_vec
 from .embed import Embedder
 from .notes import body_links, chunks, parse, relation_edges, sha256
 from .vault import ARCHIVE, Vault
+
+log = logging.getLogger("cortex.index")
+
+# Bump whenever what the index holds changes, so existing indexes rebuild themselves on startup.
+# 2: bare relation values became edges.
+SCHEMA_VERSION = "2"
+DATA_TABLES = ("files", "chunks", "chunks_fts", "edges", "expiry")
 
 STOPWORDS = set("a an and are as at be by for from how i in is it my of on or that the to was what when where which who why with".split())
 
@@ -55,6 +63,24 @@ class Index:
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.executescript(SCHEMA)
         self._ensure_vectors()
+        self._ensure_schema()
+
+    def _ensure_schema(self) -> None:
+        """An index from older code is rebuilt, since it can't be patched up row by row.
+
+        A fresh index has nothing to rebuild; an old one may predate the version key altogether.
+        """
+        stored = self._meta("schema_version")
+        if stored != SCHEMA_VERSION:
+            if self.db.execute("SELECT 1 FROM files LIMIT 1").fetchone():
+                log.info("index schema %s, code expects %s: rebuilding", stored or "unversioned", SCHEMA_VERSION)
+                # Recreated rather than emptied, so a changed table definition takes effect.
+                for table in DATA_TABLES:
+                    self.db.execute(f"DROP TABLE IF EXISTS {table}")
+                self.db.executescript(SCHEMA)
+                self.rebuild()
+            self.db.execute("INSERT OR REPLACE INTO meta VALUES('schema_version', ?)", (SCHEMA_VERSION,))
+            self.db.commit()
 
     def _meta(self, key: str) -> str | None:
         row = self.db.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
@@ -83,7 +109,7 @@ class Index:
 
     def rebuild(self) -> int:
         with self.lock:
-            for table in ("files", "chunks", "chunks_fts", "edges", "expiry"):
+            for table in DATA_TABLES:
                 self.db.execute(f"DELETE FROM {table}")
             self._create_vectors()
             return self.sync()

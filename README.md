@@ -101,7 +101,7 @@ provider = "fastembed"      # or "voyage"
 model = "BAAI/bge-small-en-v1.5"
 ```
 
-Run `cortex index --rebuild` after changing the embedding model.
+Run `cortex index --rebuild` after changing the embedding model. A new Cortex version that changes what the index holds rebuilds it on startup by itself.
 
 ## Commands
 
