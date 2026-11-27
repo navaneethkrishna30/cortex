@@ -116,7 +116,7 @@ def build_mcp(store: Store, instructions: str) -> CortexMCP:
     @mcp.tool(meta=ALWAYS_LOAD)
     async def move(path: str, to: str) -> dict:
         """Rename a note and rewrite links to it, in one commit. Never delete: to forget, move the
-        note to .archive/. Returns linked_from, the live notes that now link to the new path; after
+        note to .archive/; logs/ files may only move there. Returns linked_from, the live notes that now link to the new path; after
         archiving, fix those links or flag them to the user."""
         return await _call(store.move, path, to, actor=_actor())
 

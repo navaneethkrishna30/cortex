@@ -10,6 +10,7 @@ Hooks and commands that get memory into and out of agent sessions (SPEC.md §4).
 | `claude-code/skills/forget/SKILL.md` | `/forget <subject>`: search, confirm with you, move the note to `.archive/` |
 | `opencode/commands/*.md` | the same two commands for opencode |
 | `opencode/AGENTS.snippet.md` | session-start and capture rules for opencode's `AGENTS.md` |
+| `dreamer/` | weekly headless upkeep run (SPEC.md §5); own install steps in `dreamer/README.md` |
 
 Both hooks need only Python 3 (standard library) and fail silent: if Cortex is down or a setting is missing, the session carries on as if they weren't there.
 

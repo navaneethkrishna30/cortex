@@ -72,7 +72,8 @@ A weekly headless agent run with its own `dreamer` token, working only through t
 | B4 links in search results | built |
 | B5 index schema version | built |
 | B8 capture hook, recall hook, `/remember` `/forget` (`clients/`) | built, not installed |
-| B6, B7, B9 below | to build |
+| B9 dreaming (`clients/dreamer/`) | built, not installed |
+| B6, B7 below | to build |
 
 ## Build tickets
 
