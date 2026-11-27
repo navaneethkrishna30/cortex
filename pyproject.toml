@@ -1,6 +1,6 @@
 [project]
 name = "cortex"
-version = "0.2.0"
+version = "0.3.0"
 description = "Local-first memory layer for AI agents: markdown notes, a SQLite index, one MCP server"
 readme = "README.md"
 license = "MIT"
@@ -11,7 +11,6 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "argon2-cffi>=25.1.0",
-    "fastembed>=0.9.1",
     "httpx>=0.28.1",
     "jinja2>=3.1.6",
     "markdown-it-py>=4.2.0",
@@ -25,6 +24,9 @@ dependencies = [
     "uvicorn>=0.54.0",
     "watchdog>=6.0.0",
 ]
+
+[project.optional-dependencies]
+local = ["fastembed>=0.9.1"]
 
 [project.scripts]
 cortex = "cortex.cli:main"

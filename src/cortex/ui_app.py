@@ -415,7 +415,9 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
         On the tailnet listener only, so the public internet never sees it."""
         with store.index.lock:
             notes = store.index.db.execute("SELECT count(*) FROM files").fetchone()[0]
-        return JSONResponse({"ok": True, "notes": notes})
+        # ok stays true while the embedder is down: keyword search still works, and pending says so.
+        return JSONResponse({"ok": True, "notes": notes, "embedder": store.index.embedder.name,
+                             "pending": store.index.pending_count()})
 
     static = Path(__file__).parent / "static"
     return Starlette(routes=[

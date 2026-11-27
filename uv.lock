@@ -338,11 +338,10 @@ wheels = [
 
 [[package]]
 name = "cortex"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "argon2-cffi" },
-    { name = "fastembed" },
     { name = "httpx" },
     { name = "jinja2" },
     { name = "markdown-it-py" },
@@ -357,6 +356,11 @@ dependencies = [
     { name = "watchdog" },
 ]
 
+[package.optional-dependencies]
+local = [
+    { name = "fastembed" },
+]
+
 [package.dev-dependencies]
 dev = [
     { name = "pytest" },
@@ -365,7 +369,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "argon2-cffi", specifier = ">=25.1.0" },
-    { name = "fastembed", specifier = ">=0.9.1" },
+    { name = "fastembed", marker = "extra == 'local'", specifier = ">=0.9.1" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "markdown-it-py", specifier = ">=4.2.0" },
@@ -379,6 +383,7 @@ requires-dist = [
     { name = "uvicorn", specifier = ">=0.54.0" },
     { name = "watchdog", specifier = ">=6.0.0" },
 ]
+provides-extras = ["local"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=9.2.0" }]

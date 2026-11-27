@@ -15,11 +15,9 @@ ENV PATH=/app/.venv/bin:$PATH \
     CORTEX_HOST=0.0.0.0 \
     CORTEX_VAULT=/data/vault \
     CORTEX_AUTH_DB=/data/auth.sqlite \
-    HOME=/data \
-    FASTEMBED_CACHE_PATH=/data/cache/fastembed \
-    HF_HOME=/data/cache/huggingface
+    HOME=/data
 
 EXPOSE 8765 8766
-HEALTHCHECK --interval=30s --timeout=5s --start-period=180s --retries=5 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8766/healthz', timeout=4)"]
 CMD ["cortex", "serve"]

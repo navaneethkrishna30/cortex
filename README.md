@@ -3,7 +3,7 @@
 Shared memory for your AI agents. Cortex keeps what they know in a folder of markdown notes, logs who changed what, and serves it all through one MCP server, so Claude, Cursor and any other MCP client work from the same rules, facts and history.
 
 - **Plain files.** Notes are markdown you can read, edit and move without Cortex. The search index can always be rebuilt from them.
-- **Local by default.** It runs on your machine and embeds notes locally. Voyage embeddings are optional.
+- **Light.** It runs on your machine in about 60 MB; Voyage makes the embeddings. If Voyage is down, nothing fails: search falls back to keywords and vectors are filled in later. Local embeddings are the `local` extra.
 - **Rules agents can't quietly break.** Writes are refused if they would duplicate a live note, overwrite a newer edit, touch `core/` or include something that looks like a credential.
 - **Nothing is deleted.** Every change is a line in `.cortex/changes.jsonl` with the client's name on it. To forget a note, you move it to `.archive/`.
 
@@ -69,16 +69,16 @@ If a client ignores MCP server instructions, tell it to call `read("@context")`.
 
 Set `CORTEX_PUBLIC_URL` to the address clients use.
 
-To run it as a container, build the `Dockerfile` and mount one directory at `/data`. The vault goes in `/data/vault`, and the auth database and model caches sit beside it. Run the container as the user that owns that directory:
+To run it as a container, build the `Dockerfile` and mount one directory at `/data`. The vault goes in `/data/vault`, and the auth database sits beside it. Run the container as the user that owns that directory:
 
 ```sh
 docker build -t cortex .
 docker run -d --restart always --user 1000:1000 -v /srv/cortex:/data \
   -p 127.0.0.1:8765:8765 -p 127.0.0.1:8766:8766 \
-  -e CORTEX_PUBLIC_URL=https://your-host cortex
+  -e CORTEX_PUBLIC_URL=https://your-host --env-file voyage.env cortex
 ```
 
-The image's healthcheck calls `GET /healthz` on the UI port. It answers only after the index responds to a query, and the public port does not serve it. The first start downloads the embedding model into `/data/cache`, so give it a few minutes.
+The image's healthcheck calls `GET /healthz` on the UI port. It answers only after the index responds to a query, and the public port does not serve it. Its reply also names the embedder and counts `pending` notes, the ones still waiting for vectors; a count that never falls means a bad or missing key.
 
 `deploy/cortex.service` is a hardened systemd unit for running without a container. It expects a `cortex` user, an install in `/opt/cortex/.venv`, data under `/var/lib/cortex` and settings in `/etc/cortex.env`.
 
@@ -94,7 +94,9 @@ Where things live is set by the environment:
 | `CORTEX_MCP_PORT` | `8765` |
 | `CORTEX_UI_PORT` | `8766` |
 | `CORTEX_HOST` | `127.0.0.1`; the image sets `0.0.0.0` |
-| `VOYAGE_API_KEY` | Unset; needed only for Voyage embeddings or reranking |
+| `VOYAGE_API_KEY` | Unset; needed for Voyage embeddings and reranking |
+| `CORTEX_EMBEDDING_PROVIDER`, `_MODEL`, `_DIMENSIONS` | Override `[embedding]` below |
+| `CORTEX_RERANK_PROVIDER`, `CORTEX_RERANK_MODEL` | Override `rerank_provider` and `rerank_model` below |
 
 How the vault behaves is set in `.cortex/config.toml` inside it:
 
@@ -111,13 +113,14 @@ rerank_timeout_s = 3        # slower than this, search keeps its own order
 rerank_candidates = 30      # how many top notes the reranker reorders
 
 [embedding]
-provider = "fastembed"      # or "voyage"
-model = "BAAI/bge-small-en-v1.5"
+provider = "voyage"         # or "fastembed" with the local extra, model "BAAI/bge-small-en-v1.5"
+model = "voyage-4-lite"
+dimensions = 1024           # Voyage only: 256, 512, 1024 or 2048
 ```
 
 Reranking is off by default. When it is on, agent searches send the query and one snippet per candidate note to Voyage, which reorders them. A timeout, an error or a missing key never fails a search: results keep their usual order and say `reranked: false`. The web UI's search and `exact=true` are never reranked.
 
-Run `cortex index --rebuild` after changing the embedding model. A new Cortex version that changes what the index holds rebuilds it on startup by itself.
+A changed embedding model re-embeds every note on the next start, and a new Cortex version that changes what the index holds rebuilds it by itself. `cortex index --rebuild` does the same by hand.
 
 ## Commands
 
