@@ -5,8 +5,9 @@ and local runs need nothing and pay nothing. (The mcp library already loads the 
 which does nothing without a provider; Cortex never sets a global one.) On, the standard OTEL_* variables configure the exporters
 (endpoint, headers, OTEL_SERVICE_NAME, OTEL_RESOURCE_ATTRIBUTES).
 
-What is recorded is names, counts, durations, flags and status codes. Never query text, note
-paths or content, token names or keys: those stay on the server.
+Spans and metrics carry names, counts, durations, flags and status codes; never query text, note
+paths or content, token names or keys. Exported logs are Cortex's own log lines, exactly what
+stdout gets, so they can name a note path (a failed embed, an outside edit), never its content.
 """
 
 from __future__ import annotations

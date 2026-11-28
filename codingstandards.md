@@ -18,6 +18,7 @@ Rules a reviewer checks every change against. `make check` enforces the ones mar
 - `telemetry.py` is the only module that touches OpenTelemetry. It is off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set, and off it never imports the SDK or exporters. **[auto]** (`tests/test_telemetry.py`)
 - Measure at the seams that already exist: `CortexMCP.call_tool` for tool calls, `search()`, `voyage.Voyage.post` for every Voyage request, `Index.backfill`, `Store.sync_outside_edits`.
 - Spans and metrics carry tool names, counts, durations, flags and status codes. Never query text, note paths or content, token names or keys. **[auto]** for the search tool.
+- Exported logs are the same `cortex.*` lines stdout gets. Log lines may name a path, never note content, queries or secrets.
 
 ## Tests
 - Tests first for a behaviour change; all green before done. **[auto]**

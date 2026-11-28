@@ -105,6 +105,19 @@ def test_a_tool_call_is_one_span_with_search_inside_and_counted_by_outcome(store
     assert SECRET_WORDS not in blob and "memory/" not in blob
 
 
+def test_a_refusal_and_a_crash_are_told_apart(store, exported, monkeypatch):
+    _, reader = exported
+    mcp = build_mcp(store, "")
+    current_caller.set(Caller("t", "write"))
+    with pytest.raises(ToolError):
+        call(mcp, "read", {"path": "memory/missing.md"})
+    monkeypatch.setattr(store, "list", lambda folder: 1 / 0)
+    with pytest.raises(ToolError):
+        call(mcp, "list", {"folder": ""})
+    calls = {(p.attributes["tool"], p.attributes["outcome"]) for p in metric_points(reader)["cortex.tool.calls"]}
+    assert calls == {("read", "refused"), ("list", "error")}
+
+
 def test_voyage_requests_count_rate_limits_and_batch_sizes(exported, monkeypatch):
     _, reader = exported
     ok = {"data": [{"index": 0, "embedding": [0.0] * 4}, {"index": 1, "embedding": [1.0] * 4}]}

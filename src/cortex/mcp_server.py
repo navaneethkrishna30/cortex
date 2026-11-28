@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 import anyio
 from mcp.server.mcpserver import MCPServer
-from mcp.server.mcpserver.exceptions import ToolError
+from mcp.server.mcpserver.exceptions import ToolError, UnexpectedToolError
 
 from . import telemetry
 from .search import search as run_search
@@ -51,6 +51,10 @@ class CortexMCP(MCPServer):
                 result = await super().call_tool(name, arguments, context)
                 outcome = "ok"
                 return result
+            except UnexpectedToolError:
+                # A ToolError subclass, but it wraps a crash: a bug, not a refusal.
+                outcome = "error"
+                raise
             except ToolError:
                 # A rule said no (or the arguments were wrong): the agent's to fix, not a bug.
                 outcome = "refused"
