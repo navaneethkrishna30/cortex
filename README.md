@@ -135,7 +135,8 @@ A changed embedding model re-embeds every note on the next start, and a new Cort
 ## Develop
 
 ```bash
-uv run pytest
+uv sync --group dev
+make check      # ruff, pyright, pytest
 uv run cortex --vault "$(mktemp -d)" doctor
 ```
 

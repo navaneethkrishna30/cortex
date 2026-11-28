@@ -1,0 +1,3 @@
+# The vault is plain files with a change log, not a git repository
+
+Older Cortex committed every change to a git repository inside the vault. Since B10 (2026-11-27) it writes files atomically and appends one line per change to `.cortex/changes.jsonl` (time, actor, action, paths); each note's own History section is the only per-note record. The owner chose this in the vnext spec, whose planning record is kept outside this public repo. The consequence a reader would not expect: there are no old versions of a note to restore, so backups of the vault are the owner's job. A `.git` left behind by an older Cortex is ignored, never used.
