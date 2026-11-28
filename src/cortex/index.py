@@ -9,6 +9,7 @@ import threading
 
 import sqlite_vec
 
+from . import telemetry
 from .embed import Embedder
 from .notes import body_links, chunks, parse, relation_edges, sha256
 from .vault import ARCHIVE, Vault
@@ -181,6 +182,15 @@ class Index:
 
         The embedder is called outside the lock, so a slow API never holds up searches and writes.
         """
+        with telemetry.span("backfill") as span:
+            done, failed = self._backfill()
+            span.set_attribute("backfill.chunks", done)
+            span.set_attribute("backfill.failed", failed)
+        telemetry.backfilled(done, failed)
+        return done
+
+    def _backfill(self) -> tuple[int, bool]:
+        """(chunks given vectors, whether the embedder failed before pending emptied)."""
         done = 0
         while True:
             with self.lock:
@@ -194,7 +204,7 @@ class Index:
                     # A pending note with no chunks has nothing to embed.
                     self.db.execute("DELETE FROM pending")
                     self.db.commit()
-                    return done
+                    return done, False
             try:
                 vectors = self.embedder.embed(
                     [f"{r['path']}\n{r['heading']}\n{r['text']}" for r in rows], "document", patient=True
@@ -204,7 +214,7 @@ class Index:
                     raise ValueError(f"embedder returned {len(vectors)} vectors for {len(rows)} chunks")
             except Exception as error:  # noqa: BLE001 - an embedder problem must never fail a write
                 log.warning("embedding %d chunks failed, keyword search only for now: %s", len(rows), error)
-                return done
+                return done, True
             with self.lock:
                 for row, vector in zip(rows, vectors, strict=True):
                     # The note may have been rewritten meanwhile; its new chunks have new ids.

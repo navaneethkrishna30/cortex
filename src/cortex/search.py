@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import logging
+import time
 
 import sqlite_vec
 
+from . import telemetry
 from .index import Index, fts_query
 from .rerank import Reranker, rerank
 
@@ -85,29 +87,55 @@ def search(
     the reranker only reorders notes that would have qualified anyway; it never brings back one
     the cut dropped. exact=true is plain matching and is never reranked.
     """
-    if exact:
+    with telemetry.span("search", {"search.exact": exact, "search.scope_all": scope == "all"}) as span:
+        stages: dict[str, float] = {}
+        clock = time.perf_counter()
+        if exact:
+            with index.lock:
+                reply = {**_exact(index, query, scope, limit), "reranked": False}
+            stages["total"] = time.perf_counter() - clock
+            telemetry.search_done(stages, semantic=False, reranked=False, exact=True)
+            span.set_attribute("search.results", len(reply["results"]))
+            return reply
+        wanted = max(limit, reranker.candidates) if reranker else limit
+        # Outside the lock, like the reranker: a slow embedder must not hold up writes and other searches.
+        vector = _embed(index, query, "query")
+        stages["embed"] = time.perf_counter() - clock
         with index.lock:
-            return {**_exact(index, query, scope, limit), "reranked": False}
-    wanted = max(limit, reranker.candidates) if reranker else limit
-    # Outside the lock, like the reranker: a slow embedder must not hold up writes and other searches.
-    vector = _embed(index, query, "query")
-    with index.lock:
-        results, excluded = _fused(index, query, vector, scope, wanted)
-    reranked = False
-    if reranker and results:
-        results, reranked = rerank(reranker, query, results)
-    reply = {"results": results[:limit], "excluded": excluded, "reranked": reranked}
-    if vector is None:
-        reply["semantic"] = False
-    return reply
+            results, excluded = _fused(index, query, vector, scope, wanted, stages)
+        reranked = False
+        if reranker and results:
+            before = time.perf_counter()
+            results, reranked = rerank(reranker, query, results)
+            stages["rerank"] = time.perf_counter() - before
+        stages["total"] = time.perf_counter() - clock
+        reply = {"results": results[:limit], "excluded": excluded, "reranked": reranked}
+        if vector is None:
+            reply["semantic"] = False
+        telemetry.search_done(stages, semantic=vector is not None, reranked=reranked, exact=False)
+        span.set_attribute("search.semantic", vector is not None)
+        span.set_attribute("search.reranked", reranked)
+        span.set_attribute("search.results", len(reply["results"]))
+        for stage, seconds in stages.items():
+            span.set_attribute(f"search.{stage}_ms", round(seconds * 1000, 1))
+        return reply
 
 
 def _fused(
-    index: Index, query: str, vector: list[float] | None, scope: str | None, limit: int
+    index: Index, query: str, vector: list[float] | None, scope: str | None, limit: int, stages: dict[str, float]
 ) -> tuple[list[dict], list[dict]]:
-    """The best `limit` notes by RRF, one (best) chunk each, plus what was left out."""
+    """The best `limit` notes by RRF, one (best) chunk each, plus what was left out.
+
+    Adds the keyword and vector ranking times to `stages`.
+    """
     scores: dict[int, float] = {}
-    for ranking in (_keyword_ranking(index, query), _vector_ranking(index, vector)):
+    clock = time.perf_counter()
+    keyword = _keyword_ranking(index, query)
+    stages["keyword"] = time.perf_counter() - clock
+    clock = time.perf_counter()
+    semantic = _vector_ranking(index, vector)
+    stages["vector"] = time.perf_counter() - clock
+    for ranking in (keyword, semantic):
         for position, rowid in enumerate(ranking):
             scores[rowid] = scores.get(rowid, 0.0) + 1.0 / (RRF_K + position + 1)
     results: dict[str, dict] = {}
