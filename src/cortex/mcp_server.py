@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from contextvars import ContextVar
 from dataclasses import dataclass
 
@@ -9,6 +10,7 @@ import anyio
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
+from . import telemetry
 from .search import search as run_search
 from .store import Store
 from .vault import VaultError
@@ -39,9 +41,23 @@ class CortexMCP(MCPServer):
         return [t for t in tools if not (self._is_read_only() and t.name in WRITE_TOOLS)]
 
     async def call_tool(self, name, arguments, context=None):
-        if name in WRITE_TOOLS and self._is_read_only():
-            raise ToolError(f"unknown tool: {name}")
-        return await super().call_tool(name, arguments, context)
+        """Every tool call passes here, so here is where one is measured: tool, time, outcome."""
+        started = time.perf_counter()
+        outcome = "error"
+        with telemetry.span("mcp.tool", {"mcp.tool.name": name}) as span:
+            try:
+                if name in WRITE_TOOLS and self._is_read_only():
+                    raise ToolError(f"unknown tool: {name}")
+                result = await super().call_tool(name, arguments, context)
+                outcome = "ok"
+                return result
+            except ToolError:
+                # A rule said no (or the arguments were wrong): the agent's to fix, not a bug.
+                outcome = "refused"
+                raise
+            finally:
+                span.set_attribute("mcp.tool.outcome", outcome)
+                telemetry.tool_call(name, time.perf_counter() - started, outcome)
 
     def set_instructions(self, text: str) -> None:
         self._lowlevel_server.instructions = text

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from importlib.metadata import version
 
 import uvicorn
 
+from . import telemetry
 from .auth import AuthStore
 from .config import Settings
 from .embed import make_embedder
@@ -37,7 +39,9 @@ def build_apps(store: Store, auth: AuthStore, settings: Settings):
 
 async def serve(settings: Settings) -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    telemetry.setup(version("cortex"))
     store = open_store(settings)
+    telemetry.watch_pending(store.index.pending_count)
     store.sync_outside_edits()
     auth = AuthStore(settings.auth_db)
     if not auth.is_set_up:
@@ -55,3 +59,4 @@ async def serve(settings: Settings) -> None:
         await asyncio.gather(*(server.serve() for server in servers))
     finally:
         background.stop()
+        telemetry.shutdown()

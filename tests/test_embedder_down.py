@@ -136,7 +136,7 @@ def test_voyage_needs_no_network_to_start_and_only_backfill_retries(monkeypatch)
         timeouts.append(request.extensions["timeout"]["read"])
         return replies.pop(0)
 
-    monkeypatch.setattr("cortex.embed.time.sleep", lambda s: None)
+    monkeypatch.setattr("cortex.voyage.time.sleep", lambda s: None)
     embedder = voyage(handler, monkeypatch)
     assert embedder.dimensions == 4 and embedder.name == "voyage:voyage-4-lite"
     assert embedder.embed(["x"], patient=True) == [[0.0] * 4]

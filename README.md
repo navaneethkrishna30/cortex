@@ -97,6 +97,7 @@ Where things live is set by the environment:
 | `VOYAGE_API_KEY` | Unset; needed for Voyage embeddings and reranking |
 | `CORTEX_EMBEDDING_PROVIDER`, `_MODEL`, `_DIMENSIONS` | Override `[embedding]` below |
 | `CORTEX_RERANK_PROVIDER`, `CORTEX_RERANK_MODEL` | Override `rerank_provider` and `rerank_model` below |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Unset, so telemetry is off. Set it to an OTLP/HTTP collector (`http://collector:4318`) to export traces, metrics and logs; the other standard `OTEL_*` variables apply. About 12 MiB more memory when on |
 
 How the vault behaves is set in `.cortex/config.toml` inside it:
 

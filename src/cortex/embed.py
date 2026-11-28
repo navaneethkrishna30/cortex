@@ -13,12 +13,12 @@ from __future__ import annotations
 import hashlib
 import math
 import os
-import time
 from typing import Protocol
 
 import httpx
 
 from .config import Settings
+from .voyage import API, Voyage
 
 
 class Embedder(Protocol):
@@ -42,7 +42,7 @@ class FastEmbedder:
         return [vector.tolist() for vector in self._model.embed(texts)]
 
 
-VOYAGE_EMBED_URL = "https://api.voyageai.com/v1/embeddings"
+VOYAGE_EMBED_URL = f"{API}/embeddings"
 
 
 class VoyageEmbedder:
@@ -61,12 +61,13 @@ class VoyageEmbedder:
         self.name = f"voyage:{model}"
         self.dimensions = dimensions
         self._model = model
-        self._client = client or httpx.Client()
         self._timeouts = {False: quick_timeout, True: patient_timeout}
-        self._key = os.environ.get("VOYAGE_API_KEY", "")
+        key = os.environ.get("VOYAGE_API_KEY", "")
+        self._has_key = bool(key)
+        self._voyage = Voyage(key, client)
 
     def embed(self, texts: list[str], kind: str = "document", patient: bool = False) -> list[list[float]]:
-        if not self._key:
+        if not self._has_key:
             raise RuntimeError("VOYAGE_API_KEY is not set")
         vectors: list[list[float]] = []
         for start in range(0, len(texts), self.BATCH):
@@ -75,21 +76,12 @@ class VoyageEmbedder:
 
     def _request(self, texts: list[str], kind: str, patient: bool) -> list[list[float]]:
         body = {"model": self._model, "input": texts, "input_type": kind, "output_dimension": self.dimensions}
-        for attempt in range(2):
-            response = self._client.post(
-                VOYAGE_EMBED_URL,
-                headers={"Authorization": f"Bearer {self._key}"},
-                json=body,
-                timeout=self._timeouts[patient],
-            )
-            # A patient call retries a rate limit or a server hiccup once; anything else is the caller's.
-            if patient and response.status_code in (429, 500, 502, 503, 504) and attempt == 0:
-                time.sleep(1.0)
-                continue
-            response.raise_for_status()
-            data = sorted(response.json()["data"], key=lambda item: item["index"])
-            return [item["embedding"] for item in data]
-        raise AssertionError("unreachable")
+        # Only a patient call (the backfill) retries; someone is waiting on the others.
+        reply = self._voyage.post(
+            VOYAGE_EMBED_URL, body, operation="embed", items=len(texts), timeout=self._timeouts[patient], retry=patient
+        )
+        data = sorted(reply["data"], key=lambda item: item["index"])
+        return [item["embedding"] for item in data]
 
 
 class HashEmbedder:

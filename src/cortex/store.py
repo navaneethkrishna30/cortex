@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import re
 import threading
+import time
 from datetime import date, datetime
 
+from . import telemetry
 from .changelog import HUMAN, ChangeLog
 from .index import Index
 from .notes import (
@@ -224,13 +226,16 @@ class Store:
         The index is the baseline: a file whose hash differs from its indexed one changed outside.
         An empty index (first start, or index.sqlite lost) has no baseline, so nothing is logged.
         """
-        with self.lock:
+        started = time.perf_counter()
+        with telemetry.span("sync") as span, self.lock:
             fresh = self.index.is_empty()
             changed = self.index.sync(backfill=False)
             if changed and not fresh:
                 self.changes.append(HUMAN, "edit", changed)
             if changed:
                 self.on_change()
+            span.set_attribute("sync.changed", len(changed))
+        telemetry.synced(len(changed), time.perf_counter() - started)
         # Outside the store lock: a slow embedder must not hold up writes.
         self.index.backfill()
         return changed

@@ -10,16 +10,15 @@ import logging
 import os
 from typing import Protocol
 
-import httpx
-
 from .config import Settings
+from .voyage import API, Voyage
 
 log = logging.getLogger("cortex.rerank")
 
 # Request and response shape: https://docs.voyageai.com/reference/reranker-api
 # POST {query, documents, model}; the reply's `data` holds {index, relevance_score} per document,
 # where `index` is the document's position in the request, sorted by descending relevance.
-VOYAGE_RERANK_URL = "https://api.voyageai.com/v1/rerank"
+VOYAGE_RERANK_URL = f"{API}/rerank"
 
 
 class Reranker(Protocol):
@@ -33,23 +32,24 @@ class VoyageReranker:
         self.model = model
         self.timeout_s = timeout_s
         self.candidates = candidates
-        self._key = key
-        self._client = client or httpx.Client()
+        self._voyage = Voyage(key, client)
 
     def __repr__(self) -> str:
         return f"VoyageReranker(model={self.model!r}, timeout_s={self.timeout_s}, candidates={self.candidates})"
 
     def scores(self, query: str, documents: list[str]) -> list[float]:
         """One relevance score per document, in the order given. Raises on anything unexpected."""
-        response = self._client.post(
+        # No retry: a search is waiting, and the fused order is a fine answer.
+        reply = self._voyage.post(
             VOYAGE_RERANK_URL,
-            headers={"Authorization": f"Bearer {self._key}"},
-            json={"model": self.model, "query": query, "documents": documents},
+            {"model": self.model, "query": query, "documents": documents},
+            operation="rerank",
+            items=len(documents),
             timeout=self.timeout_s,
+            retry=False,
         )
-        response.raise_for_status()
         found: dict[int, float] = {}
-        for item in response.json()["data"]:
+        for item in reply["data"]:
             index, score = item["index"], item["relevance_score"]
             if type(index) is not int or not 0 <= index < len(documents) or index in found:
                 raise ValueError(f"bad index in rerank reply: {index!r}")
