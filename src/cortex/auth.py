@@ -15,7 +15,6 @@ from fnmatch import fnmatchcase
 
 import pyotp
 from argon2 import PasswordHasher
-from argon2.exceptions import VerificationError
 
 CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"  # no 0/O/1/I
 REQUEST_TTL = 300
@@ -144,7 +143,7 @@ class AuthStore:
             return False
         try:
             self.hasher.verify(self._get("password_hash") or "", password)
-        except (VerificationError, Exception):
+        except Exception:  # noqa: BLE001 - a missing or corrupt hash counts as a failed login, never a 500
             self._fail("password")
             self.log("login_failed", "password", ip)
             return False

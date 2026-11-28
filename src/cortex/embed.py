@@ -32,7 +32,7 @@ class FastEmbedder:
     """Local CPU model; no API key. Needs the `local` extra; the model downloads on first use."""
 
     def __init__(self, model: str):
-        from fastembed import TextEmbedding
+        from fastembed import TextEmbedding  # pyright: ignore[reportMissingImports] - the optional `local` extra
 
         self.name = f"fastembed:{model}"
         self._model = TextEmbedding(model_name=model)

@@ -6,6 +6,7 @@ import contextlib
 import time
 from collections import defaultdict, deque
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlencode
 
 from mcp.server.transport_security import TransportSecuritySettings
@@ -28,13 +29,16 @@ RATE_WINDOW = 60
 RATE_LIMITS = {"/oauth/": 120, "/mcp": 300}
 
 
-def client_ip(scope_or_request) -> str:
+def client_ip(scope_or_request: Any) -> str:
     """Forwarded IPs come from the tunnel. Used for rate limits only, never for access."""
-    headers = dict(scope_or_request.get("headers", [])) if isinstance(scope_or_request, dict) else None
-    forwarded = headers.get(b"x-forwarded-for", b"").decode() if headers is not None else scope_or_request.headers.get("x-forwarded-for", "")
+    if isinstance(scope_or_request, dict):
+        forwarded = dict(scope_or_request.get("headers", [])).get(b"x-forwarded-for", b"").decode()
+        client = scope_or_request["client"]
+    else:
+        forwarded = scope_or_request.headers.get("x-forwarded-for", "")
+        client = scope_or_request.client
     if forwarded:
         return forwarded.split(",")[0].strip()
-    client = scope_or_request["client"] if isinstance(scope_or_request, dict) else scope_or_request.client
     return (client[0] if client else "") or "unknown"
 
 

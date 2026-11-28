@@ -26,7 +26,7 @@ import sys
 import tempfile
 import urllib.request
 from collections import Counter
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path, PurePosixPath
 
 DEFAULT_PROMPT = Path(__file__).with_name("prompt.md")
@@ -56,7 +56,7 @@ def today() -> str:
 
 
 def now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 # The change log
@@ -68,7 +68,7 @@ def parse_time(value) -> datetime | None:
         moment = datetime.fromisoformat(str(value))
     except ValueError:
         return None
-    return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
+    return moment if moment.tzinfo else moment.replace(tzinfo=UTC)
 
 
 def read_changes(vault: Path) -> list[dict] | None:
@@ -447,7 +447,7 @@ def run(env, agent=command_agent, sink=None) -> int:
         task = format_task(today(), proposals, restored, moves, warnings, failed, snapshot)
         try:
             (sink or sink_from_env(env, state_dir))(task)
-        except Exception as error:  # the tracker being down must not lose the proposals
+        except Exception as error:  # noqa: BLE001 - the tracker being down must not lose the proposals
             log(f"task sink failed ({error}); writing it to {state_dir}")
             FileSink(state_dir)(task)
             delivered = False

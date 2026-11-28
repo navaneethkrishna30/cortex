@@ -51,7 +51,7 @@ def _vector_ranking(index: Index, vector: list[float] | None) -> list[int]:
     return [row["rowid"] for row in rows]
 
 
-def _excluded(index: Index, query: str, scope: str, hidden: dict[str, str]) -> list[dict]:
+def _excluded(index: Index, query: str, scope: str | None, hidden: dict[str, str]) -> list[dict]:
     excluded = [{"path": path, "reason": f"status: {status}"} for path, status in hidden.items()]
     match = fts_query(query)
     if scope != "all" and match:

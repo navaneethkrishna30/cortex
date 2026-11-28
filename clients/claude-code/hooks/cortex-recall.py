@@ -4,6 +4,7 @@ top matches to the context. Fails silent: a slow or down Cortex never blocks a p
 Needs CORTEX_URL (the server's /mcp address); without it the hook does nothing, so no address is
 ever baked in. Install: clients/README.md."""
 
+import contextlib
 import json
 import os
 import sys
@@ -77,7 +78,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    try:
+    # A hook that crashes would interrupt the prompt; a missed recall costs nothing.
+    with contextlib.suppress(Exception):
         main()
-    except Exception:
-        pass

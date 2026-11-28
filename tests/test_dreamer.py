@@ -7,7 +7,7 @@ server writes: one {"at", "actor", "action", "paths"} line per change."""
 
 import importlib.util
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -31,7 +31,7 @@ class Vault:
         (root / ".cortex").mkdir(parents=True)
 
     def log(self, actor, action, paths, at=None):
-        at = at or datetime.now(timezone.utc).isoformat()
+        at = at or datetime.now(UTC).isoformat()
         with (self.root / dream.CHANGES).open("a") as changes:
             changes.write(json.dumps({"at": at, "actor": actor, "action": action, "paths": paths}) + "\n")
 
@@ -56,7 +56,7 @@ def vault(tmp_path):
 
 
 def past(days=1):
-    return (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    return (datetime.now(UTC) - timedelta(days=days)).isoformat()
 
 
 def report(applied=(), proposals=()):
@@ -279,7 +279,7 @@ def test_a_change_logged_in_the_start_second_is_checked(vault, tmp_path):
     vault.write("docs/plan.md", "# Plan\nStep one.\nStep two.\n", at=past())
 
     def cut_at_start():
-        moment = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+        moment = datetime.now(UTC).replace(microsecond=0).isoformat()
         vault.write("docs/plan.md", "# Plan\nStep one.\n", actor="dreamer", at=moment)
 
     run(vault, tmp_path, cut_at_start)

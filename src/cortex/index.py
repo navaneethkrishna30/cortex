@@ -22,7 +22,7 @@ DATA_TABLES = ("files", "chunks", "chunks_fts", "edges", "expiry", "pending")
 # Chunks embedded per backfill pass; the embedder splits them into requests.
 BACKFILL_CHUNKS = 512
 
-STOPWORDS = set("a an and are as at be by for from how i in is it my of on or that the to was what when where which who why with".split())
+STOPWORDS = set(["a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "how", "i", "in", "is", "it", "my", "of", "on", "or", "that", "the", "to", "was", "what", "when", "where", "which", "who", "why", "with"])
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
@@ -90,7 +90,7 @@ class Index:
         model, dims = self._meta("embedding_model"), self._meta("embedding_dimensions")
         if model is None:
             self._create_vectors()
-        elif model != self.embedder.name or int(dims) != self.embedder.dimensions:
+        elif model != self.embedder.name or int(dims or 0) != self.embedder.dimensions:
             # Text and keyword search stay; only the vectors are redone, by the next backfill.
             log.info("index vectors are %s (%sd), config says %s (%sd): re-embedding",
                      model, dims, self.embedder.name, self.embedder.dimensions)
@@ -160,11 +160,14 @@ class Index:
                 vectors = self.embedder.embed(
                     [f"{r['path']}\n{r['heading']}\n{r['text']}" for r in rows], "document", patient=True
                 )
+                # A short reply would leave the same rows pending and loop here for ever.
+                if len(vectors) != len(rows):
+                    raise ValueError(f"embedder returned {len(vectors)} vectors for {len(rows)} chunks")
             except Exception as error:  # noqa: BLE001 - an embedder problem must never fail a write
                 log.warning("embedding %d chunks failed, keyword search only for now: %s", len(rows), error)
                 return done
             with self.lock:
-                for row, vector in zip(rows, vectors):
+                for row, vector in zip(rows, vectors, strict=True):
                     # The note may have been rewritten meanwhile; its new chunks have new ids.
                     if self.db.execute(
                         "SELECT 1 FROM chunks WHERE id=? AND path=? AND text=?", (row["id"], row["path"], row["text"])

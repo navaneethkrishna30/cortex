@@ -20,8 +20,8 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
 from .auth import AuthError, AuthStore
-from .config import Settings
 from .changelog import HUMAN
+from .config import Settings
 from .note_view import render_note
 from .search import search
 from .store import Store
@@ -298,7 +298,7 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
 
     async def revoke(request: Request) -> Response:
         form = await request.form()
-        auth.revoke(int(form.get("id", 0)), ip(request))
+        auth.revoke(int(str(form.get("id", 0))), ip(request))
         return RedirectResponse("/ui?done=revoked", 303)
 
     async def reenroll(request: Request) -> Response:
@@ -405,7 +405,8 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
             return files_page(409, error=_sentence(error))
         return RedirectResponse("/ui/files?done=archived", 303)
 
-    async def not_found(request: Request, exc: HTTPException) -> HTMLResponse:
+    async def not_found(request: Request, exc: Exception) -> HTMLResponse:
+        assert isinstance(exc, HTTPException)  # registered for HTTPException only
         if exc.status_code == 404:
             return page("error.html", 404, heading="Page not found", detail="This address doesn't lead anywhere in Cortex.")
         return page("error.html", exc.status_code, heading="Something went wrong", detail=str(exc.detail))

@@ -38,7 +38,7 @@ def test_symlink_escape_refused(store, tmp_path):
 
 def test_second_note_on_subject_refused_and_returned(store):
     store.write("entities/app.md", CARD, actor="a")
-    with pytest.raises(VaultError, match="entities/app.md already covers"):
+    with pytest.raises(VaultError, match=r"entities/app\.md already covers"):
         store.write("memory/app.md", "Another app line.", actor="a")
     with pytest.raises(VaultError, match="already covers"):
         store.write("entities/other.md", "---\nstatus: current\n---\n# App\nDup.\n", actor="a")

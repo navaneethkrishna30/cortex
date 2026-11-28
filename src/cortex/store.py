@@ -21,6 +21,7 @@ from .notes import (
     set_fields,
     sha256,
 )
+from .rerank import Reranker
 from .search import nearest_live_note
 from .secrets_check import find_secret
 from .vault import ARCHIVE, Vault, VaultError
@@ -68,7 +69,7 @@ class Store:
         self.lock = threading.RLock()
         self.on_change = lambda: None
         # Agent searches rerank through this when the vault turns it on; None keeps RRF order.
-        self.reranker = None
+        self.reranker: Reranker | None = None
 
     # Reads
 
@@ -185,7 +186,7 @@ class Store:
                 raise VaultError(f"{target} already exists")
             changes = {target: self.vault.read_text(source)}
             for other in self.vault.all_paths(["memory", "entities", "docs", "core"]):
-                base = changes.get(target) if other == source else self.vault.read_text(other)
+                base = changes[target] if other == source else self.vault.read_text(other)
                 rewritten = _rewrite_links(base, source, target, self.vault)
                 if other == source:
                     changes[target] = rewritten

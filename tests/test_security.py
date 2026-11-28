@@ -2,7 +2,6 @@
 
 import base64
 import hashlib
-import json
 import re
 
 import pyotp
@@ -134,7 +133,7 @@ def test_invariant_2_token_goes_only_to_secret_holder(world):
 
 def test_invariant_3_code_needs_tailnet_ui_login_and_totp(world):
     auth, public, ui, _ = world
-    secret = enrol(auth, ui)
+    enrol(auth, ui)
     _, code = start_login(public)
     # No public route takes a code.
     assert public.post("/ui/approve", data={"code": code, "totp": "000000"}).status_code == 404

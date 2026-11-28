@@ -16,6 +16,7 @@ wake a session and stop again within one prompt. Without prompt_id every Stop co
 interrupted turn fires no Stop, so the count may run late.
 """
 
+import contextlib
 import json
 import re
 import sys
@@ -60,7 +61,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    try:
+    # A hook that crashes would interrupt the session; a missed capture costs nothing.
+    with contextlib.suppress(Exception):
         main()
-    except Exception:
-        pass
