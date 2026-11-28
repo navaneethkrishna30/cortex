@@ -103,7 +103,11 @@ def _tree(paths: list[str], current: str | None = None) -> dict:
             if folder["name"] == name:
                 return folder
         folder = {
-            "name": name, "path": path, "folders": [], "files": [], "hint": FOLDER_HINTS.get(path),
+            "name": name,
+            "path": path,
+            "folders": [],
+            "files": [],
+            "hint": FOLDER_HINTS.get(path),
             "can_add": path.split("/")[0] != "logs",
             "has_current": bool(current and current.startswith(path + "/")),
         }
@@ -184,8 +188,13 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
     def session_response(target: str) -> Response:
         response = RedirectResponse(target, 303)
         response.set_cookie(
-            COOKIE, auth.new_session(), max_age=30 * 86400, httponly=True,
-            secure=settings.cookie_secure, samesite="strict", path="/ui",
+            COOKIE,
+            auth.new_session(),
+            max_age=30 * 86400,
+            httponly=True,
+            secure=settings.cookie_secure,
+            samesite="strict",
+            path="/ui",
         )
         return response
 
@@ -198,14 +207,26 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
         token = str(form.get("setup_token", "")).strip()
         if not auth.check_setup_token(token):
             auth.log("setup_failed", "bad setup token", ip(request))
-            return page("setup.html", 403, error="That setup token doesn't match. Copy it from the server console.", field="setup_token")
+            return page(
+                "setup.html",
+                403,
+                error="That setup token doesn't match. Copy it from the server console.",
+                field="setup_token",
+            )
         if token not in pending_setup or "password" in form:
             password = str(form.get("password", ""))
             if len(password) < MIN_PASSWORD:
-                return page("setup.html", 400, setup_token=token, field="password",
-                            error=f"Use at least {MIN_PASSWORD} characters. A few random words work well.")
+                return page(
+                    "setup.html",
+                    400,
+                    setup_token=token,
+                    field="password",
+                    error=f"Use at least {MIN_PASSWORD} characters. A few random words work well.",
+                )
             if password != form.get("confirm"):
-                return page("setup.html", 400, setup_token=token, field="confirm", error="The two passwords don't match.")
+                return page(
+                    "setup.html", 400, setup_token=token, field="confirm", error="The two passwords don't match."
+                )
             pending_setup[token] = (auth.hash_password(password), pyotp.random_base32())
         password_hash, secret = pending_setup[token]
         code = str(form.get("totp", "")).strip()
@@ -214,8 +235,13 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
             pending_setup.clear()
             return session_response("/ui?welcome=1")
         uri = pyotp.TOTP(secret).provisioning_uri(name="owner", issuer_name="Cortex")
-        return page("setup_totp.html", setup_token=token, secret=secret, qr=_qr_data_uri(uri),
-                    error="That code didn't match. Wait for the next one and try again." if code else None)
+        return page(
+            "setup_totp.html",
+            setup_token=token,
+            secret=secret,
+            qr=_qr_data_uri(uri),
+            error="That code didn't match. Wait for the next one and try again." if code else None,
+        )
 
     async def login(request: Request) -> Response:
         if request.method == "GET":
@@ -223,7 +249,11 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
         form = await request.form()
         if not auth.check_password(str(form.get("password", "")), ip(request)):
             wait = int(auth.locked_for("password"))
-            return page("login.html", 401, error=f"Too many attempts. Try again in {wait} seconds." if wait else "That password isn't right.")
+            return page(
+                "login.html",
+                401,
+                error=f"Too many attempts. Try again in {wait} seconds." if wait else "That password isn't right.",
+            )
         auth.log("ui_login", "", ip(request))
         return session_response("/ui")
 
@@ -239,24 +269,49 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
         modified = sorted(paths, key=lambda p: (vault.root / p).stat().st_mtime, reverse=True)[:8]
         return {
             "recent": [{"path": p, "modified": (vault.root / p).stat().st_mtime} for p in modified],
-            "overview": [{"name": name, "hint": hint, "count": sum(p.startswith(name + "/") for p in paths)}
-                         for name, hint in FOLDER_HINTS.items()],
+            "overview": [
+                {"name": name, "hint": hint, "count": sum(p.startswith(name + "/") for p in paths)}
+                for name, hint in FOLDER_HINTS.items()
+            ],
         }
 
     def access_page(status: int = 200, failures_only: bool = False, **context) -> HTMLResponse:
         rows = auth.audit(500)
         if failures_only:
             rows = [row for row in rows if EVENTS.get(row["event"], ("", False))[1]]
-        context = {"new_token": None, "new_token_name": None, "error": None, "notice": None, "error_form": None, **context}
-        return page("home.html", status, active="access", tokens=auth.list_tokens(), public_url=settings.public_url,
-                    audit=rows, failures_only=failures_only, **vault_summary(), **context)
+        context = {
+            "new_token": None,
+            "new_token_name": None,
+            "error": None,
+            "notice": None,
+            "error_form": None,
+            **context,
+        }
+        return page(
+            "home.html",
+            status,
+            active="access",
+            tokens=auth.list_tokens(),
+            public_url=settings.public_url,
+            audit=rows,
+            failures_only=failures_only,
+            **vault_summary(),
+            **context,
+        )
 
     async def home(request: Request) -> Response:
-        notices = {"approved": "Client approved. It will connect within a few seconds.", "denied": "Login denied.",
-                   "revoked": "Access revoked.", "expired": "That login request expired. Start again from the client."}
+        notices = {
+            "approved": "Client approved. It will connect within a few seconds.",
+            "denied": "Login denied.",
+            "revoked": "Access revoked.",
+            "expired": "That login request expired. Start again from the client.",
+        }
         notice = notices.get(request.query_params.get("done", ""))
-        return access_page(notice=notice, welcome="welcome" in request.query_params,
-                           failures_only=request.query_params.get("activity") == "failures")
+        return access_page(
+            notice=notice,
+            welcome="welcome" in request.query_params,
+            failures_only=request.query_params.get("activity") == "failures",
+        )
 
     async def enter_code(request: Request) -> Response:
         """Invariant 3: a login code is accepted only here, behind a fresh TOTP."""
@@ -264,7 +319,9 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
         row = auth.pending_by_code(str(form.get("code", "")))
         if not auth.check_totp(str(form.get("totp", "")), ip(request)):
             wait = int(auth.locked_for("totp"))
-            message = f"Too many attempts. Try again in {wait} seconds." if wait else "That authenticator code isn't right."
+            message = (
+                f"Too many attempts. Try again in {wait} seconds." if wait else "That authenticator code isn't right."
+            )
             return access_page(401, error=message, error_form="approve", code_value=form.get("code", ""))
         if not row:
             auth.log("code_rejected", "", ip(request))
@@ -314,8 +371,17 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
                 return RedirectResponse("/ui", 303)
             error = "That code didn't match. Wait for the next one and try again."
         else:
-            if not (auth.check_password(str(form.get("password", "")), ip(request)) and auth.check_totp(str(form.get("totp", "")), ip(request))):
-                return page("reenroll.html", 401, active="security", stage="verify", error="The password or authenticator code isn't right.")
+            if not (
+                auth.check_password(str(form.get("password", "")), ip(request))
+                and auth.check_totp(str(form.get("totp", "")), ip(request))
+            ):
+                return page(
+                    "reenroll.html",
+                    401,
+                    active="security",
+                    stage="verify",
+                    error="The password or authenticator code isn't right.",
+                )
             secret, error = pyotp.random_base32(), None
             pending_totp["reenroll"] = secret
         uri = pyotp.TOTP(secret).provisioning_uri(name="owner", issuer_name="Cortex")
@@ -324,9 +390,22 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
     def files_page(status: int = 200, **context) -> HTMLResponse:
         vault = store.vault
         paths = vault.all_paths()
-        base = {"path": None, "content": "", "hash": "", "error": None, "message": None, "active": "files", "new": False,
-                "q": None, "results": [], "history": None, "new_folders": NEW_NOTE_FOLDERS,
-                "new_folder": None, "new_name": "", "folder": None}
+        base = {
+            "path": None,
+            "content": "",
+            "hash": "",
+            "error": None,
+            "message": None,
+            "active": "files",
+            "new": False,
+            "q": None,
+            "results": [],
+            "history": None,
+            "new_folders": NEW_NOTE_FOLDERS,
+            "new_folder": None,
+            "new_name": "",
+            "folder": None,
+        }
         context = {**base, **context}
         path = context["path"]
         folder = path.split("/")[0] if path else context["new_folder"] or context["folder"]
@@ -336,10 +415,18 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
             backlinks = list(dict.fromkeys(row["src"] for row in store.index.backlinks(path)))
         # A trailing slash opens that folder in the tree without selecting a file.
         tree = _tree(paths, path or (f"{folder}/" if folder else None))
-        return page("files.html", status, tree=tree, archive=vault.archive_paths(), view=view, backlinks=backlinks,
-                    tint="archive" if folder == ARCHIVE else folder if folder in FOLDER_HINTS else None,
-                    movable=bool(path) and path.split("/")[0] in MOVABLE_FOLDERS,
-                    **vault_summary(), **context)
+        return page(
+            "files.html",
+            status,
+            tree=tree,
+            archive=vault.archive_paths(),
+            view=view,
+            backlinks=backlinks,
+            tint="archive" if folder == ARCHIVE else folder if folder in FOLDER_HINTS else None,
+            movable=bool(path) and path.split("/")[0] in MOVABLE_FOLDERS,
+            **vault_summary(),
+            **context,
+        )
 
     async def files(request: Request) -> Response:
         vault = store.vault
@@ -360,8 +447,16 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
                 return files_page(path=clean, content=vault.read_text(clean), hash=result["hash"], message="Saved.")
             except VaultError as error:
                 is_new = not expected
-                return files_page(409, path=None if is_new else path, content=content, hash=expected or "", error=_sentence(error),
-                                  new=is_new, new_folder=folder or path.split("/")[0], new_name=name or path.split("/", 1)[-1])
+                return files_page(
+                    409,
+                    path=None if is_new else path,
+                    content=content,
+                    hash=expected or "",
+                    error=_sentence(error),
+                    new=is_new,
+                    new_folder=folder or path.split("/")[0],
+                    new_name=name or path.split("/", 1)[-1],
+                )
         if "new" in params:
             return files_page(new=True, new_folder=params.get("folder", "").strip("/").split("/")[0] or None)
         query = params.get("q", "").strip()
@@ -408,7 +503,9 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
     async def not_found(request: Request, exc: Exception) -> HTMLResponse:
         assert isinstance(exc, HTTPException)  # registered for HTTPException only
         if exc.status_code == 404:
-            return page("error.html", 404, heading="Page not found", detail="This address doesn't lead anywhere in Cortex.")
+            return page(
+                "error.html", 404, heading="Page not found", detail="This address doesn't lead anywhere in Cortex."
+            )
         return page("error.html", exc.status_code, heading="Something went wrong", detail=str(exc.detail))
 
     async def healthz(request: Request) -> JSONResponse:
@@ -417,25 +514,29 @@ def build_ui_app(auth: AuthStore, store: Store, settings: Settings) -> Starlette
         with store.index.lock:
             notes = store.index.db.execute("SELECT count(*) FROM files").fetchone()[0]
         # ok stays true while the embedder is down: keyword search still works, and pending says so.
-        return JSONResponse({"ok": True, "notes": notes, "embedder": store.index.embedder.name,
-                             "pending": store.index.pending_count()})
+        return JSONResponse(
+            {"ok": True, "notes": notes, "embedder": store.index.embedder.name, "pending": store.index.pending_count()}
+        )
 
     static = Path(__file__).parent / "static"
-    return Starlette(routes=[
-        Route("/healthz", healthz),
-        Route("/", lambda request: RedirectResponse("/ui", 303)),
-        Route("/ui", guarded(home)),
-        Route("/ui/setup", guarded(setup, login=False), methods=["GET", "POST"]),
-        Route("/ui/login", guarded(login, login=False), methods=["GET", "POST"]),
-        Route("/ui/logout", guarded(logout), methods=["POST"]),
-        Route("/ui/approve", guarded(enter_code), methods=["GET", "POST"]),
-        Route("/ui/decide", guarded(decide), methods=["POST"]),
-        Route("/ui/tokens", guarded(create_token), methods=["GET", "POST"]),
-        Route("/ui/tokens/revoke", guarded(revoke), methods=["POST"]),
-        Route("/ui/reenroll", guarded(reenroll), methods=["GET", "POST"]),
-        Route("/ui/files", guarded(files), methods=["GET", "POST"]),
-        Route("/ui/files/history", guarded(note_history)),
-        Route("/ui/files/move", guarded(move_note), methods=["POST"]),
-        Route("/ui/files/archive", guarded(archive_note), methods=["POST"]),
-        Mount("/ui/static", StaticFiles(directory=static)),
-    ], exception_handlers={HTTPException: not_found})
+    return Starlette(
+        routes=[
+            Route("/healthz", healthz),
+            Route("/", lambda request: RedirectResponse("/ui", 303)),
+            Route("/ui", guarded(home)),
+            Route("/ui/setup", guarded(setup, login=False), methods=["GET", "POST"]),
+            Route("/ui/login", guarded(login, login=False), methods=["GET", "POST"]),
+            Route("/ui/logout", guarded(logout), methods=["POST"]),
+            Route("/ui/approve", guarded(enter_code), methods=["GET", "POST"]),
+            Route("/ui/decide", guarded(decide), methods=["POST"]),
+            Route("/ui/tokens", guarded(create_token), methods=["GET", "POST"]),
+            Route("/ui/tokens/revoke", guarded(revoke), methods=["POST"]),
+            Route("/ui/reenroll", guarded(reenroll), methods=["GET", "POST"]),
+            Route("/ui/files", guarded(files), methods=["GET", "POST"]),
+            Route("/ui/files/history", guarded(note_history)),
+            Route("/ui/files/move", guarded(move_note), methods=["POST"]),
+            Route("/ui/files/archive", guarded(archive_note), methods=["POST"]),
+            Mount("/ui/static", StaticFiles(directory=static)),
+        ],
+        exception_handlers={HTTPException: not_found},
+    )

@@ -23,7 +23,9 @@ def test_core_and_logs_refused_for_agents(store):
         store.write("logs/daily/x.md", "x", actor="a")
 
 
-@pytest.mark.parametrize("path", ["../x.md", "memory/../../x.md", "/etc/passwd", ".git/config", ".cortex/config.toml", "other/x.md"])
+@pytest.mark.parametrize(
+    "path", ["../x.md", "memory/../../x.md", "/etc/passwd", ".git/config", ".cortex/config.toml", "other/x.md"]
+)
 def test_path_traversal_refused(store, path):
     with pytest.raises(VaultError):
         store.write(path, "x", actor="a")
@@ -215,7 +217,9 @@ def test_save_log_appends_and_search_reports_it(store):
     assert search(store.index, "zebras", "all")["results"]
 
 
-@pytest.mark.parametrize("secret", ["ghp_" + "a" * 36, "sk-ant-" + "b" * 30, "-----BEGIN RSA PRIVATE KEY-----", "password: hunter2hunter2"])
+@pytest.mark.parametrize(
+    "secret", ["ghp_" + "a" * 36, "sk-ant-" + "b" * 30, "-----BEGIN RSA PRIVATE KEY-----", "password: hunter2hunter2"]
+)
 def test_secrets_refused_everywhere(store, secret):
     with pytest.raises(VaultError, match="secret"):
         store.write("docs/x.md", secret, actor="a")

@@ -108,11 +108,7 @@ def relation_edges(note: Note, relations: set[str] | frozenset[str] = frozenset(
 
     Bare values count only under a known relation type, so `port: 8080` never becomes an edge.
     """
-    return [
-        (key, target)
-        for key, value in note.fields.items()
-        for target in field_links(value, bare=key in relations)
-    ]
+    return [(key, target) for key, value in note.fields.items() for target in field_links(value, bare=key in relations)]
 
 
 def body_links(note: Note) -> list[str]:

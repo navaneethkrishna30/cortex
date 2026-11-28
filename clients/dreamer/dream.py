@@ -191,7 +191,9 @@ def _move_pair(vault: Path, snapshot: Path, paths: list[str], origin: dict) -> t
     return (gone[0], new[0]) if len(gone) == 1 and len(new) == 1 else None
 
 
-def guard(vault: Path, snapshot: Path, entries: list[dict], entity_limit: int = ENTITY_LIMIT) -> tuple[list, list, list, list]:
+def guard(
+    vault: Path, snapshot: Path, entries: list[dict], entity_limit: int = ENTITY_LIMIT
+) -> tuple[list, list, list, list]:
     """Check the net effect of the run on every file the dreamer touched.
 
     Returns (restored, moves, failed, warnings). A note that lost body text, or vanished other
@@ -257,8 +259,13 @@ def parse_report(text: str) -> dict | None:
 
 
 def _valid_proposal(item) -> bool:
-    return (isinstance(item, dict) and isinstance(item.get("kind"), str) and isinstance(item.get("reason"), str)
-            and isinstance(item.get("paths"), list) and all(isinstance(p, str) for p in item["paths"]))
+    return (
+        isinstance(item, dict)
+        and isinstance(item.get("kind"), str)
+        and isinstance(item.get("reason"), str)
+        and isinstance(item.get("paths"), list)
+        and all(isinstance(p, str) for p in item["paths"])
+    )
 
 
 def enforce_caps(report: dict, dreamer_changes: int) -> tuple[list[dict], list[str]]:
@@ -279,11 +286,14 @@ def enforce_caps(report: dict, dreamer_changes: int) -> tuple[list[dict], list[s
     return proposals[:PROPOSE_CAP], warnings
 
 
-def format_task(day: str, proposals: list[dict], restored=(), moves=(), warnings=(), failed=(),
-                snapshot: Path | None = None) -> tuple[str, str]:
+def format_task(
+    day: str, proposals: list[dict], restored=(), moves=(), warnings=(), failed=(), snapshot: Path | None = None
+) -> tuple[str, str]:
     """One task per run: a checkbox per proposal, then what the guard did."""
-    lines = ["Proposals from the weekly Cortex dreaming run. Tick the ones you accept and carry them out "
-             "in a session; dreaming never applies them itself."]
+    lines = [
+        "Proposals from the weekly Cortex dreaming run. Tick the ones you accept and carry them out "
+        "in a session; dreaming never applies them itself."
+    ]
     if proposals:
         lines += ["", "## Proposals"]
         for item in proposals:
@@ -293,11 +303,18 @@ def format_task(day: str, proposals: list[dict], restored=(), moves=(), warnings
         lines += ["", "## Restored", "Dreamer edits that removed body text; the note is back as it was before the run."]
         lines += [f"- `{e['path']}`: {e['reason']}" for e in restored]
     if failed:
-        lines += ["", "## Restore by hand", f"These lost body text but could not be written back. "
-                  f"The pre-run copies are kept in `{snapshot}`."]
+        lines += [
+            "",
+            "## Restore by hand",
+            f"These lost body text but could not be written back. The pre-run copies are kept in `{snapshot}`.",
+        ]
         lines += [f"- [ ] `{e['path']}`: {e['reason']}" for e in failed]
     if moves:
-        lines += ["", "## Moves to review", "Moves dreaming should only have proposed. Keep them, or move the note back."]
+        lines += [
+            "",
+            "## Moves to review",
+            "Moves dreaming should only have proposed. Keep them, or move the note back.",
+        ]
         lines += [f"- [ ] `{m['from']}` -> `{m['to']}`" for m in moves]
     if warnings:
         lines += ["", "## Warnings"] + [f"- {w}" for w in warnings]
@@ -335,8 +352,12 @@ class VikunjaSink:
     def __call__(self, task: tuple[str, str]) -> None:
         title, body = task
         payload = json.dumps({"title": title, "description": markdown_to_html(body)}).encode()
-        request = urllib.request.Request(self.endpoint, payload, method="PUT", headers={
-            "Authorization": f"Bearer {self.token}", "Content-Type": "application/json"})
+        request = urllib.request.Request(
+            self.endpoint,
+            payload,
+            method="PUT",
+            headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"},
+        )
         with self.opener(request, timeout=30) as response:
             created = json.loads(response.read() or b"{}")
         log(f"task {created.get('id', '?')} created in the tracker")
@@ -359,8 +380,10 @@ def markdown_to_html(body: str) -> str:
             out.append('<ul data-type="taskList">' if kind == "task" else "<ul>")
         open_list = kind
         if kind == "task":
-            out.append('<li data-type="taskItem" data-checked="false"><label><input type="checkbox"><span></span>'
-                       f"</label><div><p>{_inline(line[6:])}</p></div></li>")
+            out.append(
+                '<li data-type="taskItem" data-checked="false"><label><input type="checkbox"><span></span>'
+                f"</label><div><p>{_inline(line[6:])}</p></div></li>"
+            )
         elif kind == "bullet":
             out.append(f"<li><p>{_inline(line[2:])}</p></li>")
         elif line.startswith("## "):
@@ -389,8 +412,15 @@ def command_agent(prompt: str, env) -> tuple[int, str]:
         return 2, ""
     cwd = Path(env.get("DREAMER_STATE_DIR") or DEFAULT_STATE).expanduser()
     try:
-        result = subprocess.run(command, input=prompt, capture_output=True, text=True, cwd=cwd,
-                                env={**os.environ, **env}, timeout=int(env.get("DREAMER_TIMEOUT", 3600)))
+        result = subprocess.run(
+            command,
+            input=prompt,
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            env={**os.environ, **env},
+            timeout=int(env.get("DREAMER_TIMEOUT", 3600)),
+        )
     except subprocess.TimeoutExpired:
         log("agent timed out")
         return 124, ""
@@ -455,9 +485,20 @@ def run(env, agent=command_agent, sink=None) -> int:
     ok = code == 0 and report is not None and delivered and not failed
     if ok:
         state.write_text(start.isoformat() + "\n")
-    print(json.dumps({"ok": ok, "dreamer_changes": len(entries), "restored": restored, "restore_failed": failed,
-                      "snapshot_kept": str(snapshot) if failed else None, "moves": moves,
-                      "proposals": len(proposals), "warnings": warnings}))
+    print(
+        json.dumps(
+            {
+                "ok": ok,
+                "dreamer_changes": len(entries),
+                "restored": restored,
+                "restore_failed": failed,
+                "snapshot_kept": str(snapshot) if failed else None,
+                "moves": moves,
+                "proposals": len(proposals),
+                "warnings": warnings,
+            }
+        )
+    )
     return 0 if ok else 1
 
 

@@ -42,12 +42,31 @@ def post(body: dict, token: str, session: str | None) -> tuple[dict | None, str 
 
 def search(query: str) -> list[dict]:
     token = TOKEN_FILE.read_text().strip()
-    _, session = post({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-        "protocolVersion": "2025-06-18", "capabilities": {},
-        "clientInfo": {"name": "cortex-recall-hook", "version": "1"}}}, token, None)
+    _, session = post(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "cortex-recall-hook", "version": "1"},
+            },
+        },
+        token,
+        None,
+    )
     post({"jsonrpc": "2.0", "method": "notifications/initialized"}, token, session)
-    reply, _ = post({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
-                     "params": {"name": "search", "arguments": {"query": query}}}, token, session)
+    reply, _ = post(
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {"name": "search", "arguments": {"query": query}},
+        },
+        token,
+        session,
+    )
     result = (reply or {}).get("result", {})
     data = result.get("structuredContent")
     if data is None:
@@ -71,10 +90,11 @@ def main() -> None:
     if not results:
         return
     lines = [f"- {r['path']}: {' '.join(r.get('snippet', '').split())[:300]}" for r in results]
-    context = ("Cortex memory matching this prompt (auto-search at session start; read a note for "
-               "more, search again for other topics):\n" + "\n".join(lines))
-    print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
-                                             "additionalContext": context}}))
+    context = (
+        "Cortex memory matching this prompt (auto-search at session start; read a note for "
+        "more, search again for other topics):\n" + "\n".join(lines)
+    )
+    print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": context}}))
 
 
 if __name__ == "__main__":

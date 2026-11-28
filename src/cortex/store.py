@@ -49,7 +49,7 @@ def build_context(vault: Vault) -> str:
         note = vault.load(path)
         if note.status != "current":
             continue
-        line = f"- {path[len('memory/'):-3]}: {note.body.strip()}"
+        line = f"- {path[len('memory/') : -3]}: {note.body.strip()}"
         if used + len(line) + 1 > budget:
             omitted += 1
             continue
@@ -97,7 +97,9 @@ class Store:
 
     # Writes
 
-    def write(self, path: str, content: str, expected_hash: str | None = None, *, actor: str, human: bool = False) -> dict:
+    def write(
+        self, path: str, content: str, expected_hash: str | None = None, *, actor: str, human: bool = False
+    ) -> dict:
         clean = self.vault.clean(path)
         self._check_writable(clean, human)
         self._check_secret(content)
@@ -105,7 +107,9 @@ class Store:
             exists = (self.vault.root / clean).is_file()
             if expected_hash is None:
                 if exists:
-                    raise VaultError(f"{clean} already exists. read it, then pass its hash to replace it, or use update.")
+                    raise VaultError(
+                        f"{clean} already exists. read it, then pass its hash to replace it, or use update."
+                    )
                 content = self._prepare_new(clean, content, human)
             else:
                 if not exists:
@@ -233,7 +237,9 @@ class Store:
 
     # Internals
 
-    def _save(self, changes: dict[str, str], action: str, actor: str, primary: str, removed: list[str] | None = None) -> dict:
+    def _save(
+        self, changes: dict[str, str], action: str, actor: str, primary: str, removed: list[str] | None = None
+    ) -> dict:
         # A save that changes nothing leaves no trace, so "no entries" really means no change.
         changes = {p: t for p, t in changes.items() if not self._same_on_disk(p, t)}
         removed = removed or []
@@ -274,7 +280,9 @@ class Store:
         if path.startswith("memory/") and not human:
             body = parse(content).body.strip()
             if not body or "\n" in body:
-                raise VaultError("a memory line is one sentence on one line; longer detail belongs in a card or doc it links to")
+                raise VaultError(
+                    "a memory line is one sentence on one line; longer detail belongs in a card or doc it links to"
+                )
         self._check_relations(content)
 
     def _check_limits(self, path: str, content: str, before: str | None) -> None:
@@ -309,7 +317,9 @@ class Store:
             return
         unknown = {key for key, _ in relation_edges(parse(content))} - allowed - SYSTEM_LINK_KEYS
         if unknown:
-            raise VaultError(f"unknown relation types {sorted(unknown)}. Allowed (core/relations.md): {sorted(allowed)}")
+            raise VaultError(
+                f"unknown relation types {sorted(unknown)}. Allowed (core/relations.md): {sorted(allowed)}"
+            )
 
     def _prepare_new(self, path: str, content: str, human: bool) -> str:
         folder = path.split("/")[0]
@@ -339,7 +349,9 @@ class Store:
         # Cards are identified by name; similar wording doesn't make two things the same thing.
         if folder != "memory" or not body:
             return None
-        return nearest_live_note(self.index, f"{path}\n{title}\n{body}", folder, self.vault.settings.duplicate_threshold)
+        return nearest_live_note(
+            self.index, f"{path}\n{title}\n{body}", folder, self.vault.settings.duplicate_threshold
+        )
 
     def _free_slug(self, beside: str, text: str) -> str:
         folder = beside.rsplit("/", 1)[0]

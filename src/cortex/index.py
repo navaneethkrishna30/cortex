@@ -22,7 +22,40 @@ DATA_TABLES = ("files", "chunks", "chunks_fts", "edges", "expiry", "pending")
 # Chunks embedded per backfill pass; the embedder splits them into requests.
 BACKFILL_CHUNKS = 512
 
-STOPWORDS = set(["a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "how", "i", "in", "is", "it", "my", "of", "on", "or", "that", "the", "to", "was", "what", "when", "where", "which", "who", "why", "with"])
+STOPWORDS = set(
+    [
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "at",
+        "be",
+        "by",
+        "for",
+        "from",
+        "how",
+        "i",
+        "in",
+        "is",
+        "it",
+        "my",
+        "of",
+        "on",
+        "or",
+        "that",
+        "the",
+        "to",
+        "was",
+        "what",
+        "when",
+        "where",
+        "which",
+        "who",
+        "why",
+        "with",
+    ]
+)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
@@ -92,8 +125,13 @@ class Index:
             self._create_vectors()
         elif model != self.embedder.name or int(dims or 0) != self.embedder.dimensions:
             # Text and keyword search stay; only the vectors are redone, by the next backfill.
-            log.info("index vectors are %s (%sd), config says %s (%sd): re-embedding",
-                     model, dims, self.embedder.name, self.embedder.dimensions)
+            log.info(
+                "index vectors are %s (%sd), config says %s (%sd): re-embedding",
+                model,
+                dims,
+                self.embedder.name,
+                self.embedder.dimensions,
+            )
             self._create_vectors()
             self.db.execute("INSERT OR IGNORE INTO pending SELECT DISTINCT path FROM chunks")
             self.db.commit()
@@ -149,7 +187,8 @@ class Index:
                 rows = self.db.execute(
                     "SELECT c.id, c.path, c.heading, c.text FROM chunks c JOIN pending p USING(path) "
                     "WHERE c.id NOT IN (SELECT rowid FROM chunks_vec) "
-                    "ORDER BY c.path, c.id LIMIT ?", (BACKFILL_CHUNKS,)
+                    "ORDER BY c.path, c.id LIMIT ?",
+                    (BACKFILL_CHUNKS,),
                 ).fetchall()
                 if not rows:
                     # A pending note with no chunks has nothing to embed.
@@ -210,8 +249,14 @@ class Index:
             self._delete_rows(path)
             self.db.execute(
                 "INSERT INTO files VALUES(?,?,?,?,?,?)",
-                (path, sha256(text), path.split("/")[0], note.status, note.title,
-                 (self.vault.root / path).stat().st_mtime),
+                (
+                    path,
+                    sha256(text),
+                    path.split("/")[0],
+                    note.status,
+                    note.title,
+                    (self.vault.root / path).stat().st_mtime,
+                ),
             )
             if note.expires:
                 self.db.execute("INSERT INTO expiry VALUES(?,?)", (path, note.expires))
@@ -279,13 +324,9 @@ class Index:
         links = self.db.execute(
             "SELECT DISTINCT dst FROM edges WHERE src=? AND dst IS NOT NULL AND dst != src ORDER BY dst", (path,)
         )
-        backlinks = self.db.execute(
-            "SELECT DISTINCT src FROM edges WHERE dst=? AND src != dst ORDER BY src", (path,)
-        )
+        backlinks = self.db.execute("SELECT DISTINCT src FROM edges WHERE dst=? AND src != dst ORDER BY src", (path,))
         return {"links": [row["dst"] for row in links], "backlinks": [row["src"] for row in backlinks]}
 
     def broken_links(self) -> list[dict]:
-        rows = self.db.execute(
-            "SELECT src, target FROM edges WHERE dst IS NULL AND src NOT LIKE 'logs/%' ORDER BY src"
-        )
+        rows = self.db.execute("SELECT src, target FROM edges WHERE dst IS NULL AND src NOT LIKE 'logs/%' ORDER BY src")
         return [dict(row) for row in rows]

@@ -74,8 +74,7 @@ def test_non_dict_event_is_ignored(tmp_path):
 
 def run_hook(stdin, tmp_path):
     env = {"HOME": str(tmp_path), "PATH": "/usr/bin:/bin"}
-    return subprocess.run([sys.executable, str(HOOK)], input=stdin, capture_output=True,
-                          text=True, env=env, timeout=10)
+    return subprocess.run([sys.executable, str(HOOK)], input=stdin, capture_output=True, text=True, env=env, timeout=10)
 
 
 def test_bad_input_exits_zero_silently(tmp_path):

@@ -101,43 +101,52 @@ def build_public_app(mcp: CortexMCP, auth: AuthStore, settings: Settings) -> Sta
     secure = settings.cookie_secure
 
     async def resource_metadata(request: Request) -> JSONResponse:
-        return JSONResponse({
-            "resource": f"{base}/mcp",
-            "authorization_servers": [base],
-            "scopes_supported": ["read", "write"],
-        })
+        return JSONResponse(
+            {
+                "resource": f"{base}/mcp",
+                "authorization_servers": [base],
+                "scopes_supported": ["read", "write"],
+            }
+        )
 
     async def server_metadata(request: Request) -> JSONResponse:
-        return JSONResponse({
-            "issuer": base,
-            "authorization_endpoint": f"{base}/oauth/authorize",
-            "token_endpoint": f"{base}/oauth/token",
-            "registration_endpoint": f"{base}/oauth/register",
-            "response_types_supported": ["code"],
-            "grant_types_supported": ["authorization_code", "refresh_token"],
-            "code_challenge_methods_supported": ["S256"],
-            "token_endpoint_auth_methods_supported": ["none"],
-            "scopes_supported": ["read", "write"],
-        })
+        return JSONResponse(
+            {
+                "issuer": base,
+                "authorization_endpoint": f"{base}/oauth/authorize",
+                "token_endpoint": f"{base}/oauth/token",
+                "registration_endpoint": f"{base}/oauth/register",
+                "response_types_supported": ["code"],
+                "grant_types_supported": ["authorization_code", "refresh_token"],
+                "code_challenge_methods_supported": ["S256"],
+                "token_endpoint_auth_methods_supported": ["none"],
+                "scopes_supported": ["read", "write"],
+            }
+        )
 
     async def register(request: Request) -> JSONResponse:
         try:
             body = await request.json()
             client_id = auth.register_client(
-                str(body.get("client_name", "unnamed client")), list(body.get("redirect_uris", [])), settings.redirect_allowlist
+                str(body.get("client_name", "unnamed client")),
+                list(body.get("redirect_uris", [])),
+                settings.redirect_allowlist,
             )
         except AuthError as error:
             return _error("invalid_redirect_uri", str(error))
         except (ValueError, AttributeError, TypeError):
             return _error("invalid_client_metadata")
-        return JSONResponse({
-            "client_id": client_id,
-            "client_name": body.get("client_name", "unnamed client"),
-            "redirect_uris": body["redirect_uris"],
-            "grant_types": ["authorization_code", "refresh_token"],
-            "response_types": ["code"],
-            "token_endpoint_auth_method": "none",
-        }, 201)
+        return JSONResponse(
+            {
+                "client_id": client_id,
+                "client_name": body.get("client_name", "unnamed client"),
+                "redirect_uris": body["redirect_uris"],
+                "grant_types": ["authorization_code", "refresh_token"],
+                "response_types": ["code"],
+                "token_endpoint_auth_method": "none",
+            },
+            201,
+        )
 
     async def authorize(request: Request) -> Response:
         query = request.query_params
@@ -145,7 +154,11 @@ def build_public_app(mcp: CortexMCP, auth: AuthStore, settings: Settings) -> Sta
         redirect_uri = query.get("redirect_uri", "")
         if not client or redirect_uri not in client["redirect_uris"].split("\n"):
             return _error("invalid_request", "unknown client or redirect_uri")
-        if query.get("response_type") != "code" or query.get("code_challenge_method") != "S256" or not query.get("code_challenge"):
+        if (
+            query.get("response_type") != "code"
+            or query.get("code_challenge_method") != "S256"
+            or not query.get("code_challenge")
+        ):
             return _error("invalid_request", "PKCE with S256 is required")
         requested = query.get("scope", "write").split()
         scope = "write" if "write" in requested or not requested else "read"
@@ -154,7 +167,9 @@ def build_public_app(mcp: CortexMCP, auth: AuthStore, settings: Settings) -> Sta
         )
         page = templates.get_template("waiting.html").render(code=code, seconds=REQUEST_TTL)
         response = HTMLResponse(page, headers={"Cache-Control": "no-store", "X-Frame-Options": "DENY"})
-        response.set_cookie("cortex_login", secret, max_age=REQUEST_TTL, httponly=True, secure=secure, samesite="lax", path="/oauth")
+        response.set_cookie(
+            "cortex_login", secret, max_age=REQUEST_TTL, httponly=True, secure=secure, samesite="lax", path="/oauth"
+        )
         return response
 
     async def poll(request: Request) -> JSONResponse:
@@ -165,7 +180,9 @@ def build_public_app(mcp: CortexMCP, auth: AuthStore, settings: Settings) -> Sta
         if result["state"]:
             params["state"] = result["state"]
         joiner = "&" if "?" in result["redirect_uri"] else "?"
-        response = JSONResponse({"status": "approved", "redirect": f"{result['redirect_uri']}{joiner}{urlencode(params)}"})
+        response = JSONResponse(
+            {"status": "approved", "redirect": f"{result['redirect_uri']}{joiner}{urlencode(params)}"}
+        )
         response.delete_cookie("cortex_login", path="/oauth")
         return response
 
@@ -175,8 +192,10 @@ def build_public_app(mcp: CortexMCP, auth: AuthStore, settings: Settings) -> Sta
         try:
             if form.get("grant_type") == "authorization_code":
                 issued = auth.exchange_code(
-                    str(form.get("code", "")), str(form.get("client_id", "")),
-                    str(form.get("redirect_uri", "")), str(form.get("code_verifier", "")),
+                    str(form.get("code", "")),
+                    str(form.get("client_id", "")),
+                    str(form.get("redirect_uri", "")),
+                    str(form.get("code_verifier", "")),
                 )
             elif form.get("grant_type") == "refresh_token":
                 issued = auth.refresh(str(form.get("refresh_token", "")))

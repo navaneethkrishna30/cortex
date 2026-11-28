@@ -47,11 +47,21 @@ def fresh_totp(auth, secret, step_offset=0):
 
 
 def start_login(public):
-    client_id = public.post("/oauth/register", json={"client_name": "laptop", "redirect_uris": [REDIRECT]}).json()["client_id"]
-    page = public.get("/oauth/authorize", params={
-        "client_id": client_id, "redirect_uri": REDIRECT, "response_type": "code",
-        "code_challenge": CHALLENGE, "code_challenge_method": "S256", "state": "s1", "scope": "write",
-    })
+    client_id = public.post("/oauth/register", json={"client_name": "laptop", "redirect_uris": [REDIRECT]}).json()[
+        "client_id"
+    ]
+    page = public.get(
+        "/oauth/authorize",
+        params={
+            "client_id": client_id,
+            "redirect_uri": REDIRECT,
+            "response_type": "code",
+            "code_challenge": CHALLENGE,
+            "code_challenge_method": "S256",
+            "state": "s1",
+            "scope": "write",
+        },
+    )
     code = re.search(r"<code>(.+?)</code>", page.text).group(1)
     return client_id, code
 
@@ -95,7 +105,7 @@ def test_folders_start_collapsed_except_the_current_one(world):
     enrol(auth, ui)
     store.write("docs/guide.md", "# Guide\nv1\n", actor="a")
     store.write("memory/fact.md", "A fact.", actor="a")
-    assert 'open data-folder' not in ui.get("/ui/files").text
+    assert "open data-folder" not in ui.get("/ui/files").text
     page = ui.get("/ui/files", params={"path": "docs/guide.md"})
     assert 'open data-folder="docs"' in page.text and 'open data-folder="memory"' not in page.text
 
@@ -161,20 +171,43 @@ def test_full_login_then_tools_then_refresh_rotation(world):
     approve(ui, auth, secret, code)
     redirect = public.get("/oauth/poll").json()["redirect"]
     auth_code = re.search(r"code=([^&]+)", redirect).group(1)
-    tokens = public.post("/oauth/token", data={
-        "grant_type": "authorization_code", "code": auth_code, "client_id": client_id,
-        "redirect_uri": REDIRECT, "code_verifier": VERIFIER,
-    }).json()
+    tokens = public.post(
+        "/oauth/token",
+        data={
+            "grant_type": "authorization_code",
+            "code": auth_code,
+            "client_id": client_id,
+            "redirect_uri": REDIRECT,
+            "code_verifier": VERIFIER,
+        },
+    ).json()
     assert tokens["expires_in"] == 3600
 
-    rpc(public, tokens["access_token"], "tools/call", {"name": "write", "arguments": {"path": "memory/oauth-works.md", "content": "OAuth works."}})
+    rpc(
+        public,
+        tokens["access_token"],
+        "tools/call",
+        {"name": "write", "arguments": {"path": "memory/oauth-works.md", "content": "OAuth works."}},
+    )
     assert store.changes.entries()[-1]["actor"] == "laptop"
 
-    rotated = public.post("/oauth/token", data={"grant_type": "refresh_token", "refresh_token": tokens["refresh_token"]})
+    rotated = public.post(
+        "/oauth/token", data={"grant_type": "refresh_token", "refresh_token": tokens["refresh_token"]}
+    )
     assert rotated.status_code == 200
     # Reusing the old refresh token revokes the family.
-    assert public.post("/oauth/token", data={"grant_type": "refresh_token", "refresh_token": tokens["refresh_token"]}).status_code == 400
-    assert public.post("/oauth/token", data={"grant_type": "refresh_token", "refresh_token": rotated.json()["refresh_token"]}).status_code == 400
+    assert (
+        public.post(
+            "/oauth/token", data={"grant_type": "refresh_token", "refresh_token": tokens["refresh_token"]}
+        ).status_code
+        == 400
+    )
+    assert (
+        public.post(
+            "/oauth/token", data={"grant_type": "refresh_token", "refresh_token": rotated.json()["refresh_token"]}
+        ).status_code
+        == 400
+    )
 
 
 def test_ui_routes_absent_from_public_and_mcp_absent_from_ui(world):
@@ -262,7 +295,12 @@ def test_ui_core_edit_needs_confirmation_and_logs_as_human(world):
     data = {"path": "core/rules.md", "content": "# Rules\nEdited.\n", "hash": current}
     assert ui.post("/ui/files", data=data).status_code == 409
     assert ui.post("/ui/files", data={**data, "confirm_core": "yes"}).status_code == 200
-    assert store.changes.entries()[-1] | {"at": None} == {"at": None, "actor": "human", "action": "write", "paths": ["core/rules.md"]}
+    assert store.changes.entries()[-1] | {"at": None} == {
+        "at": None,
+        "actor": "human",
+        "action": "write",
+        "paths": ["core/rules.md"],
+    }
     stale = ui.post("/ui/files", data={**data, "confirm_core": "yes"})
     assert stale.status_code == 409 and "stale" in stale.text.lower()
 

@@ -54,7 +54,14 @@ def test_summary_metrics():
         {"question": "q1", "expected": ["a"], "got": ["a"], "rank": 1, "ms": 10.0, "reranked": True},
         {"question": "q2", "expected": ["b"], "got": ["x", "y", "b"], "rank": 3, "ms": 20.0, "reranked": True},
         {"question": "q3", "expected": ["c"], "got": ["x"], "rank": None, "ms": 30.0, "reranked": False},
-        {"question": "q4", "expected": ["d", "e"], "got": ["x", "e", "y", "z"], "rank": 2, "ms": 40.0, "reranked": False},
+        {
+            "question": "q4",
+            "expected": ["d", "e"],
+            "got": ["x", "e", "y", "z"],
+            "rank": 2,
+            "ms": 40.0,
+            "reranked": False,
+        },
     ]
     report = summarise(outcomes)
     assert report["questions"] == 4
@@ -132,7 +139,9 @@ def cortex(monkeypatch, *args):
 
 def test_cli_json_output(sample_vault, monkeypatch, capsys):
     monkeypatch.delenv("VOYAGE_API_KEY", raising=False)
-    cortex(monkeypatch, "--vault", str(sample_vault), "eval", str(SAMPLE / "questions.tsv"), "--json", "--rerank", "off")
+    cortex(
+        monkeypatch, "--vault", str(sample_vault), "eval", str(SAMPLE / "questions.tsv"), "--json", "--rerank", "off"
+    )
     report = json.loads(capsys.readouterr().out)
     assert report["questions"] == 10 and report["reranked"] == 0
     assert set(report) >= {"hit@1", "hit@8", "mrr", "latency_ms", "misses"}

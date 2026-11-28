@@ -74,7 +74,9 @@ class AuthStore:
 
     def log(self, event: str, detail: str = "", ip: str = "") -> None:
         with self.lock:
-            self.db.execute("INSERT INTO audit(at, event, detail, ip) VALUES(?,?,?,?)", (time.time(), event, detail, ip))
+            self.db.execute(
+                "INSERT INTO audit(at, event, detail, ip) VALUES(?,?,?,?)", (time.time(), event, detail, ip)
+            )
             self.db.commit()
 
     def audit(self, limit: int = 100) -> list[sqlite3.Row]:
@@ -228,7 +230,8 @@ class AuthStore:
         """One row per credential: static tokens, and OAuth clients as a single family."""
         rows = self.db.execute(
             "SELECT id, name, scope, kind, family, created FROM tokens WHERE revoked=0 AND kind IN ('static','refresh') "
-            "AND (expires IS NULL OR expires > ?) ORDER BY created DESC", (time.time(),)
+            "AND (expires IS NULL OR expires > ?) ORDER BY created DESC",
+            (time.time(),),
         ).fetchall()
         return [dict(row) for row in rows if row["kind"] == "static" or not row["family"] or self._live_refresh(row)]
 
@@ -285,7 +288,9 @@ class AuthStore:
             if not clash:
                 return code
 
-    def create_login_request(self, client_id: str, redirect_uri: str, challenge: str, scope: str, state: str | None, ip: str) -> tuple[str, str]:
+    def create_login_request(
+        self, client_id: str, redirect_uri: str, challenge: str, scope: str, state: str | None, ip: str
+    ) -> tuple[str, str]:
         """Returns (secret, code). The secret stays with the requester's browser."""
         with self.lock:
             now = time.time()
@@ -314,14 +319,16 @@ class AuthStore:
             normal = f"{normal[:4]}-{normal[4:]}"
         return self.db.execute(
             "SELECT r.*, c.name AS client_name FROM login_requests r JOIN clients c ON c.id=r.client_id "
-            "WHERE r.code=? AND r.status='pending' AND r.expires>?", (normal, time.time())
+            "WHERE r.code=? AND r.status='pending' AND r.expires>?",
+            (normal, time.time()),
         ).fetchone()
 
     def decide(self, request_id: int, approve: bool, scope: str, ip: str) -> None:
         with self.lock:
             row = self.db.execute(
                 "SELECT r.*, c.name AS client_name FROM login_requests r JOIN clients c ON c.id=r.client_id "
-                "WHERE r.id=? AND r.status='pending' AND r.expires>?", (request_id, time.time())
+                "WHERE r.id=? AND r.status='pending' AND r.expires>?",
+                (request_id, time.time()),
             ).fetchone()
             if not row:
                 raise AuthError("request is gone or expired")
@@ -356,7 +363,8 @@ class AuthStore:
         with self.lock:
             row = self.db.execute(
                 "SELECT r.*, c.name AS client_name FROM login_requests r JOIN clients c ON c.id=r.client_id "
-                "WHERE r.auth_code_hash=? AND r.status='issued'", (digest(code),)
+                "WHERE r.auth_code_hash=? AND r.status='issued'",
+                (digest(code),),
             ).fetchone()
             if not row or row["auth_expires"] <= time.time():
                 raise AuthError("invalid_grant")
@@ -364,7 +372,11 @@ class AuthStore:
             self.db.execute("UPDATE login_requests SET status='used' WHERE id=?", (row["id"],))
             self.db.commit()
             computed = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
-            if row["client_id"] != client_id or row["redirect_uri"] != redirect_uri or not secrets.compare_digest(computed, row["challenge"]):
+            if (
+                row["client_id"] != client_id
+                or row["redirect_uri"] != redirect_uri
+                or not secrets.compare_digest(computed, row["challenge"])
+            ):
                 raise AuthError("invalid_grant")
             return self._issue(row["client_name"], row["scope"], secrets.token_urlsafe(16))
 

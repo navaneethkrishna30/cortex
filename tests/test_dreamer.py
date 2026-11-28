@@ -65,8 +65,12 @@ def report(applied=(), proposals=()):
 
 
 def env_for(vault, tmp_path, **extra):
-    return {"DREAMER_VAULT": str(vault.root), "DREAMER_STATE_DIR": str(tmp_path / "state"),
-            "DREAMER_CMD": "unused", **extra}
+    return {
+        "DREAMER_VAULT": str(vault.root),
+        "DREAMER_STATE_DIR": str(tmp_path / "state"),
+        "DREAMER_CMD": "unused",
+        **extra,
+    }
 
 
 def agent_doing(action, output=None):
@@ -126,8 +130,12 @@ def test_runs_again_after_a_change(vault, tmp_path):
 
 def test_own_changes_do_not_trigger_next_week(vault, tmp_path):
     vault.write("memory/tea.md", "---\nstatus: current\n---\nGreen tea until 2026-12-31.\n", at=past())
-    fix = lambda: vault.write("memory/tea.md", "---\nstatus: current\nexpires: 2026-12-31\n---\nGreen tea until 2026-12-31.\n",
-                              actor="dreamer", action="update")
+    fix = lambda: vault.write(
+        "memory/tea.md",
+        "---\nstatus: current\nexpires: 2026-12-31\n---\nGreen tea until 2026-12-31.\n",
+        actor="dreamer",
+        action="update",
+    )
     run(vault, tmp_path, fix)
     agent = agent_doing(lambda: None)
     dream.run(env_for(vault, tmp_path), agent=agent)
@@ -184,8 +192,10 @@ def test_note_deleted_by_the_dreamer_is_restored(vault, tmp_path):
 
 def test_frontmatter_and_history_changes_are_kept(vault, tmp_path):
     vault.write("entities/app.md", "---\nstatus: current\ndepends_on: db\n---\n# App\nThe app.\n", at=past())
-    new = ("---\nstatus: current\ndepends_on: \"[[entities/db]]\"\nexpires: 2027-01-31\n---\n# App\nThe app.\n\n"
-           "## History\n- 2026-11-27: expires (unset) -> 2027-01-31 (end date stated)\n")
+    new = (
+        '---\nstatus: current\ndepends_on: "[[entities/db]]"\nexpires: 2027-01-31\n---\n# App\nThe app.\n\n'
+        "## History\n- 2026-11-27: expires (unset) -> 2027-01-31 (end date stated)\n"
+    )
     code, tasks = run(vault, tmp_path, lambda: vault.write("entities/app.md", new, actor="dreamer", action="update"))
     assert vault.read("entities/app.md") == new and tasks == []
 
@@ -288,8 +298,9 @@ def test_a_change_logged_in_the_start_second_is_checked(vault, tmp_path):
 
 def test_supersede_is_kept_but_flagged(vault, tmp_path):
     vault.write("memory/tea.md", "---\nstatus: current\n---\nPrefers green tea.\n", at=past())
-    swap = lambda: vault.write("memory/tea.md", "---\nstatus: superseded\n---\nPrefers green tea.\n",
-                               actor="dreamer", action="supersede")
+    swap = lambda: vault.write(
+        "memory/tea.md", "---\nstatus: superseded\n---\nPrefers green tea.\n", actor="dreamer", action="supersede"
+    )
     code, tasks = run(vault, tmp_path, swap)
     assert "status: superseded" in vault.read("memory/tea.md")
     assert "propose-only" in tasks[0][1]
@@ -322,7 +333,9 @@ def long_card(detail_lines):
 
 def test_card_shortened_to_its_repo_link_is_kept(vault, tmp_path):
     vault.write("entities/app.md", long_card(30), at=past())
-    short = f"---\nstatus: current\nkind: repo\n---\n# App\nThe app. Code: {REPO}\nHow it is built and run: {REPO}#readme\n"
+    short = (
+        f"---\nstatus: current\nkind: repo\n---\n# App\nThe app. Code: {REPO}\nHow it is built and run: {REPO}#readme\n"
+    )
     run(vault, tmp_path, lambda: vault.write("entities/app.md", short, actor="dreamer"))
     assert vault.read("entities/app.md") == short
 
@@ -341,12 +354,15 @@ def test_cutting_a_card_already_under_the_limit_is_restored(vault, tmp_path):
     assert vault.read("entities/app.md") == long_card(3)
 
 
-@pytest.mark.parametrize("text", [
-    "no frontmatter\nline\n",
-    "---\nstatus: current\n---\n# T\nBody.\n\n## History\n- x\n",
-    "---\nstatus: current\n---\n# T\nA\n\n## History\n- x\n\n## Later\nB\n",
-    "---\n---\nBody\n",
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "no frontmatter\nline\n",
+        "---\nstatus: current\n---\n# T\nBody.\n\n## History\n- x\n",
+        "---\nstatus: current\n---\n# T\nA\n\n## History\n- x\n\n## Later\nB\n",
+        "---\n---\nBody\n",
+    ],
+)
 def test_body_split_matches_the_server(text):
     assert dream.body_without_history(text) == parse(text).body_without_history
 
@@ -355,8 +371,9 @@ def test_body_split_matches_the_server(text):
 
 
 def test_report_parsing_takes_the_last_json_block():
-    text = "```json\n{\"applied\": [], \"proposals\": [1]}\n```\nthen\n" + report(
-        proposals=[{"kind": "merge", "paths": ["a.md", "b.md"], "reason": "same"}])
+    text = '```json\n{"applied": [], "proposals": [1]}\n```\nthen\n' + report(
+        proposals=[{"kind": "merge", "paths": ["a.md", "b.md"], "reason": "same"}]
+    )
     parsed = dream.parse_report(text)
     assert parsed["proposals"] == [{"kind": "merge", "paths": ["a.md", "b.md"], "reason": "same"}]
     assert dream.parse_report("nothing") is None
@@ -372,13 +389,17 @@ def test_proposals_are_capped_and_warned():
 
 
 def test_task_has_one_checkbox_per_proposal():
-    proposals = [{"kind": "merge", "paths": ["memory/a.md", "memory/b.md"], "reason": "same fact"},
-                 {"kind": "move-to-repo", "paths": ["entities/app.md"], "reason": "build steps"}]
+    proposals = [
+        {"kind": "merge", "paths": ["memory/a.md", "memory/b.md"], "reason": "same fact"},
+        {"kind": "move-to-repo", "paths": ["entities/app.md"], "reason": "build steps"},
+    ]
     title, body = dream.format_task(DAY, proposals)
     assert title == f"Cortex dreaming proposals {DAY}"
     boxes = [line for line in body.splitlines() if line.startswith("- [ ] ")]
-    assert boxes == ["- [ ] **merge** `memory/a.md`, `memory/b.md`: same fact",
-                     "- [ ] **move-to-repo** `entities/app.md`: build steps"]
+    assert boxes == [
+        "- [ ] **merge** `memory/a.md`, `memory/b.md`: same fact",
+        "- [ ] **move-to-repo** `entities/app.md`: build steps",
+    ]
 
 
 def test_no_task_when_nothing_to_say(vault, tmp_path):
@@ -407,9 +428,14 @@ def test_vikunja_sink_puts_one_task():
     sent = []
 
     class Response:
-        def __enter__(self): return self
-        def __exit__(self, *a): return False
-        def read(self): return b'{"id": 7}'
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return b'{"id": 7}'
 
     def opener(request, timeout):
         sent.append(request)

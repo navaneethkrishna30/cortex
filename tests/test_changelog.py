@@ -54,7 +54,12 @@ def test_missing_log_reads_as_empty(tmp_path):
 
 def test_write_and_replace_are_logged_as_write(store):
     made = store.write("entities/app.md", CARD, actor="laptop")
-    assert last(store) | {"at": None} == {"at": None, "actor": "laptop", "action": "write", "paths": ["entities/app.md"]}
+    assert last(store) | {"at": None} == {
+        "at": None,
+        "actor": "laptop",
+        "action": "write",
+        "paths": ["entities/app.md"],
+    }
     store.write("entities/app.md", CARD.replace("8080", "9090"), made["hash"], actor="phone")
     assert (last(store)["actor"], last(store)["action"]) == ("phone", "write")
     assert len(logged(store)) == 2
@@ -73,10 +78,18 @@ def test_update_supersede_move_and_log_name_every_path(store):
     assert (last(store)["action"], last(store)["paths"]) == ("update", ["entities/app.md"])
     store.write("memory/focus.md", "Current focus is gardening.", actor="a")
     new = store.supersede("memory/focus.md", "Current focus is beekeeping.", "changed", actor="dreamer")["path"]
-    assert last(store) | {"at": None} == {"at": None, "actor": "dreamer", "action": "supersede", "paths": ["memory/focus.md", new]}
+    assert last(store) | {"at": None} == {
+        "at": None,
+        "actor": "dreamer",
+        "action": "supersede",
+        "paths": ["memory/focus.md", new],
+    }
     store.write("docs/a.md", "# A\nSee [[app]].\n", actor="a")
     store.move("entities/app.md", "entities/service.md", actor="c")
-    assert (last(store)["action"], last(store)["paths"]) == ("move", ["entities/app.md", "entities/service.md", "docs/a.md"])
+    assert (last(store)["action"], last(store)["paths"]) == (
+        "move",
+        ["entities/app.md", "entities/service.md", "docs/a.md"],
+    )
     path = store.save_log("raw", "Something happened.", actor="d")["path"]
     assert last(store) | {"at": None} == {"at": None, "actor": "d", "action": "save_log", "paths": [path]}
 

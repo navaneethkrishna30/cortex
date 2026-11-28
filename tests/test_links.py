@@ -32,7 +32,11 @@ def test_bare_list_relation_makes_edges(store):
 
 def test_mixed_bare_and_bracketed_values(store):
     seed_targets(store)
-    store.write("entities/app.md", card("app", 'depends_on: ["[[server]]", laptop]\nlocated_in: [[[server]], entities/laptop]\n'), actor="a")
+    store.write(
+        "entities/app.md",
+        card("app", 'depends_on: ["[[server]]", laptop]\nlocated_in: [[[server]], entities/laptop]\n'),
+        actor="a",
+    )
     assert edges(store, "entities/app.md") == [
         ("depends_on", "laptop", "entities/laptop.md"),
         ("depends_on", "server", "entities/server.md"),
@@ -57,7 +61,11 @@ def test_bare_values_of_other_fields_are_not_edges(store):
 
 def linked_vault(store):
     seed_targets(store)
-    store.write("entities/app.md", card("app", "depends_on: server\nlocated_in: [[server]]\n") + "Runs beside [[laptop]] and [[app]].\n", actor="a")
+    store.write(
+        "entities/app.md",
+        card("app", "depends_on: server\nlocated_in: [[server]]\n") + "Runs beside [[laptop]] and [[app]].\n",
+        actor="a",
+    )
     store.write("memory/likes-app.md", "Nav likes the [[app]] zebra.", actor="a")
 
 
