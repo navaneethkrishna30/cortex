@@ -14,7 +14,7 @@ by HUMAN. `paths` names every file written or removed, vault-relative.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 HUMAN = "human"
@@ -22,13 +22,13 @@ ACTIONS = ("write", "update", "supersede", "move", "save_log", "edit")
 
 
 def now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _moment(stamp: str) -> datetime:
     """Either Z or +00:00 reads the same, so callers needn't match the writer's spelling."""
     moment = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
-    return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
+    return moment if moment.tzinfo else moment.replace(tzinfo=UTC)
 
 
 class ChangeLog:

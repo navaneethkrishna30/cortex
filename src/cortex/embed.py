@@ -32,7 +32,7 @@ class FastEmbedder:
     """Local CPU model; no API key. Needs the `local` extra; the model downloads on first use."""
 
     def __init__(self, model: str):
-        from fastembed import TextEmbedding
+        from fastembed import TextEmbedding  # pyright: ignore[reportMissingImports] - the optional `local` extra
 
         self.name = f"fastembed:{model}"
         self._model = TextEmbedding(model_name=model)
@@ -50,8 +50,14 @@ class VoyageEmbedder:
 
     BATCH = 128
 
-    def __init__(self, model: str, dimensions: int, client: httpx.Client | None = None,
-                 quick_timeout: float = 5.0, patient_timeout: float = 30.0):
+    def __init__(
+        self,
+        model: str,
+        dimensions: int,
+        client: httpx.Client | None = None,
+        quick_timeout: float = 5.0,
+        patient_timeout: float = 30.0,
+    ):
         self.name = f"voyage:{model}"
         self.dimensions = dimensions
         self._model = model
@@ -71,8 +77,10 @@ class VoyageEmbedder:
         body = {"model": self._model, "input": texts, "input_type": kind, "output_dimension": self.dimensions}
         for attempt in range(2):
             response = self._client.post(
-                VOYAGE_EMBED_URL, headers={"Authorization": f"Bearer {self._key}"},
-                json=body, timeout=self._timeouts[patient],
+                VOYAGE_EMBED_URL,
+                headers={"Authorization": f"Bearer {self._key}"},
+                json=body,
+                timeout=self._timeouts[patient],
             )
             # A patient call retries a rate limit or a server hiccup once; anything else is the caller's.
             if patient and response.status_code in (429, 500, 502, 503, 504) and attempt == 0:

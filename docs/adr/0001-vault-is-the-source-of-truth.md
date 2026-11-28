@@ -1,0 +1,3 @@
+# The markdown vault is the source of truth; the index is a cache
+
+Notes are plain markdown files the owner can read, edit and move without Cortex. Everything else Cortex keeps about them (keyword index, vectors, links) sits in one SQLite file that is rebuilt from the vault whenever it is lost, its schema version changes or the embedding model changes. Backups therefore copy only the vault and `auth.sqlite`. Edits made to the files directly are picked up by the watcher and logged as the owner's. The cost: every query-side feature has to be derivable from the files, so nothing may be stored only in the index.

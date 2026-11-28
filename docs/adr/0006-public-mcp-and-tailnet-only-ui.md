@@ -1,0 +1,3 @@
+# The MCP listener is public; the UI listener is never exposed publicly
+
+Cortex runs two listeners in one process. The MCP port (`/mcp`, `/oauth/*`) is meant for a public tunnel so hosted clients can reach it, and accepts only tokens and OAuth grants. The UI port (`/ui`, `/healthz`) holds the password and authenticator login, token creation and the approval of OAuth codes, and is reachable only over the private network. OAuth approval therefore needs someone already logged in to the UI, so a stolen public endpoint alone can never mint access. Merging the two into one listener would undo that, and the security tests depend on it.

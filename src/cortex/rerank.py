@@ -88,5 +88,5 @@ def rerank(reranker: Reranker, query: str, results: list[dict]) -> tuple[list[di
         status = getattr(getattr(error, "response", None), "status_code", None)
         log.warning("rerank failed (%s%s): keeping RRF order", type(error).__name__, f" {status}" if status else "")
         return results, False
-    ranked = sorted(zip(scores, range(len(results))), key=lambda pair: (-pair[0], pair[1]))
+    ranked = sorted(zip(scores, range(len(results)), strict=True), key=lambda pair: (-pair[0], pair[1]))
     return [{**results[i], "rerank_score": round(score, 4)} for score, i in ranked], True

@@ -58,7 +58,8 @@ def summarise(outcomes: list[dict]) -> dict:
         "reranked": sum(o["reranked"] for o in outcomes),
         "misses": [
             {"question": o["question"], "expected": o["expected"], "got": o["got"][:MISS_SHOWN], "rank": o["rank"]}
-            for o in outcomes if o["rank"] != 1
+            for o in outcomes
+            if o["rank"] != 1
         ],
     }
 
@@ -71,19 +72,23 @@ def run(index: Index, questions: list[Question], reranker: Reranker | None = Non
         found = search(index, question.text, "all", limit=DEFAULT_LIMIT, reranker=reranker)
         ms = (time.perf_counter() - start) * 1000
         got = [r["path"] for r in found["results"]]
-        outcomes.append({
-            "question": question.text, "expected": question.expected, "got": got,
-            "rank": first_hit(question.expected, got), "ms": ms, "reranked": found["reranked"],
-        })
+        outcomes.append(
+            {
+                "question": question.text,
+                "expected": question.expected,
+                "got": got,
+                "rank": first_hit(question.expected, got),
+                "ms": ms,
+                "reranked": found["reranked"],
+            }
+        )
     return summarise(outcomes)
 
 
 def format_report(report: dict) -> str:
     n = report["questions"]
     latency = report["latency_ms"]
-    lines = [
-        f"miss: {m['question']!r} wanted {'|'.join(m['expected'])}, got {m['got']}" for m in report["misses"]
-    ]
+    lines = [f"miss: {m['question']!r} wanted {'|'.join(m['expected'])}, got {m['got']}" for m in report["misses"]]
     lines.append(
         f"hit@1 {report['hit@1']}/{n}  hit@8 {report['hit@8']}/{n}  MRR {report['mrr']:.3f}  "
         f"p50 {latency['p50']} ms  p95 {latency['p95']} ms  p99 {latency['p99']} ms  "

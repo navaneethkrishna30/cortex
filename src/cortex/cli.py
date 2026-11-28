@@ -46,8 +46,11 @@ def run_eval(settings, file: str, rerank: str | None = None, as_json: bool = Fal
     report = evaluation.run(store.index, evaluation.load_questions(file), store.reranker)
     if rerank == "on" and report["reranked"] < report["questions"]:
         # Otherwise an "on" run that quietly fell back looks like a fair comparison.
-        print(f"warning: {report['questions'] - report['reranked']} of {report['questions']} searches "
-              "not reranked (check VOYAGE_API_KEY and the log)", file=sys.stderr)
+        print(
+            f"warning: {report['questions'] - report['reranked']} of {report['questions']} searches "
+            "not reranked (check VOYAGE_API_KEY and the log)",
+            file=sys.stderr,
+        )
     print(json.dumps(report, indent=2) if as_json else evaluation.format_report(report))
 
 

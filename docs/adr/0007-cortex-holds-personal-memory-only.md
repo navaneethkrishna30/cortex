@@ -1,0 +1,3 @@
+# Cortex holds personal memory only; code and service facts live in their repos
+
+Cortex is for facts about the owner that span sessions: preferences, people, decisions, goals, and short cards that point to where detail lives. How a codebase works, deploy trails, version lines and status narratives belong in each repo's own docs and history. Memory lines and cards have hard size limits (300 and 1200 characters), and writes over them are refused with "move detail to the repo". The folders are the only kinds of memory; no others (observations, pages, mental models) are added. This keeps what every session loads small enough to stay useful.

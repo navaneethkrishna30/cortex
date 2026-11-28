@@ -37,5 +37,31 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "pyright>=1.1.400",
     "pytest>=9.2.0",
+    "ruff>=0.17.6",
 ]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+# pycodestyle, pyflakes, isort, bugbear, pyupgrade, blind excepts, simplify, ruff's own.
+select = ["E", "F", "W", "I", "B", "UP", "BLE", "SIM", "RUF"]
+# The formatter owns line length; what it can't wrap (long strings, docstrings) stays readable as is.
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests name one-line actions as lambdas and unpack whole results to show their shape.
+"tests/*" = ["E731", "RUF059"]
+
+[tool.pyright]
+include = ["src"]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# A langsmith pytest plugin installed globally breaks collection; Cortex never uses it.
+addopts = "-q -p no:langsmith"

@@ -51,7 +51,7 @@ def _vector_ranking(index: Index, vector: list[float] | None) -> list[int]:
     return [row["rowid"] for row in rows]
 
 
-def _excluded(index: Index, query: str, scope: str, hidden: dict[str, str]) -> list[dict]:
+def _excluded(index: Index, query: str, scope: str | None, hidden: dict[str, str]) -> list[dict]:
     excluded = [{"path": path, "reason": f"status: {status}"} for path, status in hidden.items()]
     match = fts_query(query)
     if scope != "all" and match:
@@ -62,14 +62,21 @@ def _excluded(index: Index, query: str, scope: str, hidden: dict[str, str]) -> l
             ).fetchone()
             if row["n"]:
                 excluded.append(
-                    {"folder": f"{folder}/", "matches": row["n"],
-                     "reason": "not searched by default; tell the user, use scope='all' if they ask"}
+                    {
+                        "folder": f"{folder}/",
+                        "matches": row["n"],
+                        "reason": "not searched by default; tell the user, use scope='all' if they ask",
+                    }
                 )
     return excluded
 
 
 def search(
-    index: Index, query: str, scope: str | None = None, exact: bool = False, limit: int = DEFAULT_LIMIT,
+    index: Index,
+    query: str,
+    scope: str | None = None,
+    exact: bool = False,
+    limit: int = DEFAULT_LIMIT,
     reranker: Reranker | None = None,
 ) -> dict:
     """Fused results, reranked when a reranker is given; `reranked` says whether that happened.
@@ -111,9 +118,14 @@ def _fused(
             break
         row = index.db.execute(
             f"SELECT c.path, c.heading, c.text, f.folder, {STATUS} AS status, f.title FROM chunks c "
-            "JOIN files f USING(path) LEFT JOIN expiry e USING(path) WHERE c.id=?", (rowid,)
+            "JOIN files f USING(path) LEFT JOIN expiry e USING(path) WHERE c.id=?",
+            (rowid,),
         ).fetchone()
-        if row is None or row["folder"] == UNSEARCHED_FOLDER or (scope != "all" and row["folder"] not in DEFAULT_FOLDERS):
+        if (
+            row is None
+            or row["folder"] == UNSEARCHED_FOLDER
+            or (scope != "all" and row["folder"] not in DEFAULT_FOLDERS)
+        ):
             continue
         if row["status"] != "current":
             hidden[row["path"]] = row["status"]
@@ -121,8 +133,11 @@ def _fused(
         top_score = top_score or scores[rowid]
         if row["path"] not in results and len(results) < limit:
             results[row["path"]] = {
-                "path": row["path"], "title": row["title"], "heading": row["heading"],
-                "snippet": row["text"][:400], "score": round(scores[rowid], 4),
+                "path": row["path"],
+                "title": row["title"],
+                "heading": row["heading"],
+                "snippet": row["text"][:400],
+                "score": round(scores[rowid], 4),
                 **index.neighbours(row["path"]),
             }
     return list(results.values()), _excluded(index, query, scope, hidden)
@@ -133,7 +148,8 @@ def _exact(index: Index, query: str, scope: str | None, limit: int) -> dict:
     results, hidden = [], {}
     rows = index.db.execute(
         f"SELECT f.path, f.folder, {STATUS} AS status FROM files f LEFT JOIN expiry e USING(path) "
-        "WHERE f.folder != ? ORDER BY f.path", (UNSEARCHED_FOLDER,)
+        "WHERE f.folder != ? ORDER BY f.path",
+        (UNSEARCHED_FOLDER,),
     ).fetchall()
     outside: dict[str, int] = {}
     for row in rows:
@@ -146,14 +162,20 @@ def _exact(index: Index, query: str, scope: str | None, limit: int) -> dict:
         elif row["status"] != "current":
             hidden[row["path"]] = row["status"]
         elif len(results) < limit:
-            results.append({
-                "path": row["path"], "snippet": text[max(0, position - 80) : position + 200],
-                **index.neighbours(row["path"]),
-            })
+            results.append(
+                {
+                    "path": row["path"],
+                    "snippet": text[max(0, position - 80) : position + 200],
+                    **index.neighbours(row["path"]),
+                }
+            )
     excluded = [{"path": path, "reason": f"status: {status}"} for path, status in hidden.items()]
     excluded += [
-        {"folder": f"{folder}/", "matches": count,
-         "reason": "not searched by default; tell the user, use scope='all' if they ask"}
+        {
+            "folder": f"{folder}/",
+            "matches": count,
+            "reason": "not searched by default; tell the user, use scope='all' if they ask",
+        }
         for folder, count in outside.items()
     ]
     return {"results": results, "excluded": excluded}
@@ -175,7 +197,8 @@ def nearest_live_note(index: Index, text: str, folder: str, threshold: float) ->
                 return None
             match = index.db.execute(
                 "SELECT f.path FROM chunks c JOIN files f USING(path) "
-                "WHERE c.id=? AND f.folder=? AND f.status='current'", (row["rowid"], folder)
+                "WHERE c.id=? AND f.folder=? AND f.status='current'",
+                (row["rowid"], folder),
             ).fetchone()
             if match:
                 return match["path"]

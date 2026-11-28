@@ -54,6 +54,15 @@ def test_backfill_gives_the_vectors_once_the_embedder_is_back(store, flaky):
     assert "semantic" not in search(store.index, "Funnel listener")
 
 
+def test_a_short_embedder_reply_leaves_the_note_pending_instead_of_looping(store, flaky):
+    flaky.down = True
+    store.write("memory/funnel.md", "Funnel publishes the MCP listener.\n", actor="a")
+    flaky.down = False
+    flaky.embed = lambda texts, kind="document", patient=False: []
+    assert store.index.backfill() == 0
+    assert store.index.pending_count() == 1
+
+
 def test_an_outside_edit_while_the_embedder_is_down_is_still_indexed(store, flaky):
     flaky.down = True
     (store.vault.root / "docs").mkdir()

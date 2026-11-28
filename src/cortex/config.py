@@ -41,9 +41,7 @@ class Settings:
     rerank_model: str = "rerank-3"
     rerank_timeout_s: float = 3.0
     rerank_candidates: int = 30
-    allowed_folders: list[str] = field(
-        default_factory=lambda: ["core", "memory", "entities", "docs", "logs"]
-    )
+    allowed_folders: list[str] = field(default_factory=lambda: ["core", "memory", "entities", "docs", "logs"])
     redirect_allowlist: list[str] = field(default_factory=lambda: list(DEFAULT_REDIRECTS))
 
     @property
@@ -89,8 +87,13 @@ def load_settings(vault: str | Path | None = None) -> Settings:
             if key in config:
                 setattr(settings, key, config[key])
     # The environment wins, so a deployment can choose without writing into the vault.
-    for key, cast in (("embedding_provider", str), ("embedding_model", str),
-                      ("embedding_dimensions", int), ("rerank_provider", str), ("rerank_model", str)):
+    for key, cast in (
+        ("embedding_provider", str),
+        ("embedding_model", str),
+        ("embedding_dimensions", int),
+        ("rerank_provider", str),
+        ("rerank_model", str),
+    ):
         value = os.environ.get(f"CORTEX_{key.upper()}")
         if value:
             setattr(settings, key, cast(value))

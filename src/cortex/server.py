@@ -47,7 +47,9 @@ async def serve(settings: Settings) -> None:
     background.start()
     servers = [
         uvicorn.Server(uvicorn.Config(public, host=settings.host, port=settings.mcp_port, proxy_headers=False)),
-        uvicorn.Server(uvicorn.Config(ui, host=settings.host, port=settings.ui_port, proxy_headers=False, lifespan="off")),
+        uvicorn.Server(
+            uvicorn.Config(ui, host=settings.host, port=settings.ui_port, proxy_headers=False, lifespan="off")
+        ),
     ]
     try:
         await asyncio.gather(*(server.serve() for server in servers))

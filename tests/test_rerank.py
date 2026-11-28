@@ -32,9 +32,12 @@ class FakeClient:
 def reversed_scores(request):
     """Ranks the last candidate first, so a note from below the usual cut must come up."""
     count = len(request["json"]["documents"])
-    return {"object": "list", "data": [
-        {"index": i, "relevance_score": round((i + 1) / count, 3)} for i in reversed(range(count))
-    ], "model": request["json"]["model"], "usage": {"total_tokens": 10}}
+    return {
+        "object": "list",
+        "data": [{"index": i, "relevance_score": round((i + 1) / count, 3)} for i in reversed(range(count))],
+        "model": request["json"]["model"],
+        "usage": {"total_tokens": 10},
+    }
 
 
 def reranker(reply=reversed_scores, timeout_s=3.0):
@@ -90,15 +93,18 @@ def test_no_reranker_keeps_rrf_order_and_says_so(zebras):
     assert paths(found) == paths(search(zebras.index, "zebra", limit=30))[:8]
 
 
-@pytest.mark.parametrize("failure", [
-    httpx.ReadTimeout("timed out"),
-    httpx.ConnectError("refused"),
-    httpx.Response(500, json={"detail": "boom"}, request=httpx.Request("POST", VOYAGE_RERANK_URL)),
-    {"data": [{"index": 99, "relevance_score": 0.9}]},
-    {"data": [{"index": 0, "relevance_score": 0.9}, {"index": 0, "relevance_score": 0.8}]},
-    {"unexpected": True},
-    {"data": [{"index": "0", "relevance_score": "high"}]},
-])
+@pytest.mark.parametrize(
+    "failure",
+    [
+        httpx.ReadTimeout("timed out"),
+        httpx.ConnectError("refused"),
+        httpx.Response(500, json={"detail": "boom"}, request=httpx.Request("POST", VOYAGE_RERANK_URL)),
+        {"data": [{"index": 99, "relevance_score": 0.9}]},
+        {"data": [{"index": 0, "relevance_score": 0.9}, {"index": 0, "relevance_score": 0.8}]},
+        {"unexpected": True},
+        {"data": [{"index": "0", "relevance_score": "high"}]},
+    ],
+)
 def test_failures_keep_rrf_order(zebras, caplog, failure):
     expected = paths(search(zebras.index, "zebra"))
     rerank, client = reranker(lambda request: failure)
@@ -144,7 +150,9 @@ def test_index_lock_is_free_during_the_http_call(zebras):
     seen = []
 
     def reply(request):
-        other = threading.Thread(target=lambda: seen.append(zebras.index.lock.acquire(timeout=1) and zebras.index.lock.release() is None))
+        other = threading.Thread(
+            target=lambda: seen.append(zebras.index.lock.acquire(timeout=1) and zebras.index.lock.release() is None)
+        )
         other.start()
         other.join()
         return reversed_scores(request)
@@ -195,10 +203,18 @@ def test_rerank_settings_load_from_config(tmp_path):
     )
     loaded = load_settings(tmp_path)
     assert (loaded.rerank_provider, loaded.rerank_model, loaded.rerank_timeout_s, loaded.rerank_candidates) == (
-        "voyage", "rerank-3-lite", 2, 25)
+        "voyage",
+        "rerank-3-lite",
+        2,
+        25,
+    )
 
 
 def test_rerank_defaults():
     defaults = Settings(vault=None, auth_db=None)
     assert (defaults.rerank_provider, defaults.rerank_model, defaults.rerank_timeout_s, defaults.rerank_candidates) == (
-        "none", "rerank-3", 3.0, 30)
+        "none",
+        "rerank-3",
+        3.0,
+        30,
+    )

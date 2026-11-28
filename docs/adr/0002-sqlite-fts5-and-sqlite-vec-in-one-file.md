@@ -1,0 +1,3 @@
+# One SQLite file holds keyword and vector search (FTS5 + sqlite-vec)
+
+Search fuses an FTS5 keyword ranking with a sqlite-vec vector ranking by reciprocal rank fusion, in the same SQLite file as the notes' rows and links, inside the server's own process. There is no separate vector database or search service: the vault is one person's notes, the index is a rebuildable cache (ADR 0001), and the server is meant to stay near 60 MiB. Moving to another store means rewriting `index.py` and `search.py`. Graph expansion stops at one hop (links and backlinks on each result), because deeper and derived links measured as noise (SPEC §3).

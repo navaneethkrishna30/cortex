@@ -16,15 +16,18 @@ wake a session and stop again within one prompt. Without prompt_id every Stop co
 interrupted turn fires no Stop, so the count may run late.
 """
 
+import contextlib
 import json
 import re
 import sys
 from pathlib import Path
 
 TURNS = 10
-REASON = ("If this session produced a lasting fact about the owner, a decision or a preference, "
-          "save at most 3 through Cortex write/update/supersede; code and service facts go to "
-          "their repo; otherwise do nothing.")
+REASON = (
+    "If this session produced a lasting fact about the owner, a decision or a preference, "
+    "save at most 3 through Cortex write/update/supersede; code and service facts go to "
+    "their repo; otherwise do nothing."
+)
 SESSION_ID = re.compile(r"[A-Za-z0-9_-]{1,128}")  # becomes a file name, so no paths
 
 
@@ -60,7 +63,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    try:
+    # A hook that crashes would interrupt the session; a missed capture costs nothing.
+    with contextlib.suppress(Exception):
         main()
-    except Exception:
-        pass

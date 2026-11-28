@@ -4,6 +4,7 @@ top matches to the context. Fails silent: a slow or down Cortex never blocks a p
 Needs CORTEX_URL (the server's /mcp address); without it the hook does nothing, so no address is
 ever baked in. Install: clients/README.md."""
 
+import contextlib
 import json
 import os
 import sys
@@ -41,12 +42,31 @@ def post(body: dict, token: str, session: str | None) -> tuple[dict | None, str 
 
 def search(query: str) -> list[dict]:
     token = TOKEN_FILE.read_text().strip()
-    _, session = post({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-        "protocolVersion": "2025-06-18", "capabilities": {},
-        "clientInfo": {"name": "cortex-recall-hook", "version": "1"}}}, token, None)
+    _, session = post(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "cortex-recall-hook", "version": "1"},
+            },
+        },
+        token,
+        None,
+    )
     post({"jsonrpc": "2.0", "method": "notifications/initialized"}, token, session)
-    reply, _ = post({"jsonrpc": "2.0", "id": 2, "method": "tools/call",
-                     "params": {"name": "search", "arguments": {"query": query}}}, token, session)
+    reply, _ = post(
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {"name": "search", "arguments": {"query": query}},
+        },
+        token,
+        session,
+    )
     result = (reply or {}).get("result", {})
     data = result.get("structuredContent")
     if data is None:
@@ -70,14 +90,14 @@ def main() -> None:
     if not results:
         return
     lines = [f"- {r['path']}: {' '.join(r.get('snippet', '').split())[:300]}" for r in results]
-    context = ("Cortex memory matching this prompt (auto-search at session start; read a note for "
-               "more, search again for other topics):\n" + "\n".join(lines))
-    print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
-                                             "additionalContext": context}}))
+    context = (
+        "Cortex memory matching this prompt (auto-search at session start; read a note for "
+        "more, search again for other topics):\n" + "\n".join(lines)
+    )
+    print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": context}}))
 
 
 if __name__ == "__main__":
-    try:
+    # A hook that crashes would interrupt the prompt; a missed recall costs nothing.
+    with contextlib.suppress(Exception):
         main()
-    except Exception:
-        pass
